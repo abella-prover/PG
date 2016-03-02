@@ -1,0 +1,3 @@
+[submodule "abella-ref"]
+	path = abella-ref
+	url = https://github.com/abella-prover/abella.git

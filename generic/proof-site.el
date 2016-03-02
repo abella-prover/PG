@@ -41,6 +41,8 @@
       (coq "Coq" "v" nil (".vo" ".glob"))
       (phox "PhoX" "phx")
 
+      (abella "Abella" "thm")
+
       ;; Obscure instances or conflict with other Emacs modes.
 
       ;; (lego "LEGO" "l")
