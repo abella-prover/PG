@@ -81,6 +81,11 @@ These are appended at the end of `coq-shell-init-cmd'."
   :type '(repeat (cons (string :tag "command")))
   :group 'coq)
 
+(defcustom coq-optimise-resp-windows-enable t
+  "If non-nil (default) resize vertically response windw after each command."
+  :type 'boolean
+  :group 'coq)
+
 ;; Default coq is only Private_ and _subproof
 (defcustom coq-search-blacklist-string ; add this? \"_ind\" \"_rect\" \"_rec\" 
  "\"Private_\" \"_subproof\""
@@ -811,6 +816,16 @@ Return nil if S is nil."
       (substring s 0 (- (length s) 1))
     s))
 
+(defun coq-remove-heading-quote (s)
+  "Return the string S without its heading \"\'\" if any.
+Return nil if S is nil."
+  (if (and s (string-match "\\`'" s))
+      (substring s 1 (length s))
+    s))
+
+(defun coq-clean-id-at-point (s)
+  (coq-remove-heading-quote (coq-remove-trailing-dot s)))
+
 (defun coq-is-symbol-or-punct (c)
   "Return non nil if character C is a punctuation or a symbol constituent.
 If C is nil, return nil."
@@ -855,15 +870,15 @@ Support dot.notation.of.modules."
    (let* ((symb (cond
                  ((fboundp 'symbol-near-point) (symbol-near-point))
                  ((fboundp 'symbol-at-point) (symbol-at-point))))
-          (symbclean (when symb (coq-remove-trailing-dot (symbol-name symb)))))
-     (when (and symb (not (zerop (length symbclean)))
-                (not (coq-string-starts-with-symbol symbclean)))
+          (symbclean (when symb (coq-clean-id-at-point (symbol-name symb)))))
+     (when (and symb (not (zerop (length symbclean))))
        symbclean))))
 
 
 (defun coq-id-or-notation-at-point ()
-  (or (coq-id-at-point) (concat "\"" (coq-notation-at-position (point)) "\"")))
-
+  (or (coq-id-at-point)
+      (let ((notation (coq-notation-at-position (point))))
+        (if notation (concat "\"" notation "\"") ""))))
 
 (defcustom coq-remap-mouse-1 nil
   "Wether coq mode should remap mouse button 1 to coq queries.
@@ -1209,6 +1224,7 @@ width is synchronized by coq (?!)."
   :group 'coq
   :eval (coq-set-auto-adapt-printing-width))
 
+
 ;; defpacustom fails to call :eval during inititialization, see trac #456
 (coq-set-auto-adapt-printing-width)
 
@@ -1480,8 +1496,7 @@ Near here means PT is either inside or just aside of a comment."
   (set (make-local-variable 'open-paren-in-column-0-is-defun-start) nil)
   ;; do not break lines in code when filling
   (set (make-local-variable 'fill-nobreak-predicate)
-       (lambda ()
-         (not (eq (get-text-property (point) 'face) 'font-lock-comment-face))))
+       (lambda () (not (nth 4 (syntax-ppss)))))
   ;; coq mode specific indentation function
   (set (make-local-variable 'fill-paragraph-function) 'coq-fill-paragraph-function)
 
@@ -2047,20 +2062,28 @@ mouse activation."
           (progn (end-of-line) (point)))))))
       (insert (concat "End" section)))))
 
+(defun coq--format-intros (output)
+  "Create an “intros” form from the OUTPUT of “Show Intros”."
+  (let* ((shints (replace-regexp-in-string "[\r\n ]*\\'" "" output)))
+    (if (or (string= "" shints)
+            (string-match coq-error-regexp shints))
+        (error "Don't know what to intro")
+      (format "intros %s" shints))))
+
 (defun coq-insert-intros ()
   "Insert an intros command with names given by Show Intros.
 Based on idea mentioned in Coq reference manual."
   (interactive)
-  (let* ((shints (proof-shell-invisible-cmd-get-result "Show Intros."))
-         ;; insert a dot before the trailing \n and put intros at begining
-         (intros (concat "intros " (substring shints 0 (- (length shints) 1)) ".\n")))
-    (if (or (< (length shints) 2);; empty response is just NL
-            (string-match coq-error-regexp shints))
-        (error "Don't know what to intro")
-      (let ((pt (point)))
-        (insert intros)
-        (indent-region pt (point))))))
-
+  (let* ((output (proof-shell-invisible-cmd-get-result "Show Intros.")))
+    (indent-region (point)
+                   (progn (insert (coq--format-intros output))
+                          (save-excursion
+                            (insert (if coq-one-command-per-line "\n" " "))
+                            (point))))
+    ;; `proof-electric-terminator' moves the point in all sorts of strange
+    ;; ways, so we run it last
+    (let ((last-command-event ?.)) ;; Insert a dot
+      (proof-electric-terminator))))
 
 (defvar coq-keywords-accepting-as-regex (regexp-opt '("induction" "destruct" "inversion" "injection")))
 
@@ -2532,14 +2555,18 @@ Only when three-buffer-mode is enabled."
                   (goto-char (point-min))
                   (recenter))))))))))
 
+;; TODO: remove/add hook instead? 
+(defun coq-optimise-resp-windows-if-option ()
+  (when coq-optimise-resp-windows-enable (coq-optimise-resp-windows)))
+
 ;; TODO: I would rather have a response-insert-hook thant this two hooks
 ;; Careful: coq-optimise-resp-windows must be called BEFORE proof-show-first-goal,
 ;; i.e. added in hook AFTER it.
 
 ;; Adapt when displaying a normal message
-(add-hook 'proof-shell-handle-delayed-output-hook 'coq-optimise-resp-windows)
+(add-hook 'proof-shell-handle-delayed-output-hook 'coq-optimise-resp-windows-if-option)
 ;; Adapt when displaying an error or interrupt
-(add-hook 'proof-shell-handle-error-or-interrupt-hook 'coq-optimise-resp-windows)
+(add-hook 'proof-shell-handle-error-or-interrupt-hook 'coq-optimise-resp-windows-if-option)
 
 ;;; DOUBLE HIT ELECTRIC TERMINATOR
 ;; Trying to have double hit on colon behave like electric terminator. The "."

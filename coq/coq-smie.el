@@ -379,6 +379,9 @@ The point should be at the beginning of the command name."
       ;; we can.
       (save-excursion (coq-smie-backward-token)))
 
+     ;; easier to return directly than calling coq-smie-backward-token
+     ((member tok '("lazymatch" "multimatch")) "match")
+
      ;; detect "with signature", otherwies use coq-smie-backward-token
      ((equal tok "with")
       (let ((p (point)))
@@ -462,10 +465,7 @@ The point should be at the beginning of the command name."
 
 
 (defun coq-smie-backward-token ()
-  (let* ((tok (smie-default-backward-token))
-	 (start (save-excursion (coq-find-real-start) (point)))
-	 ;(is-tactic (coq-smie-is-tactic)) ; useless and morevoer expensive if at each call
-         )
+  (let* ((tok (smie-default-backward-token)))
     (cond
      ;; Distinguish between "," from quantification and other uses of
      ;; "," (tuples, tactic arguments)
@@ -969,14 +969,15 @@ KIND is the situation and TOKEN is the thing w.r.t which the rule applies."
        ;;     now ( tac3 ;  <- neither here
        ;;           tac5) ;
        ;;   ]
-       ((and (equal token "; tactic")
-	     coq-indent-semicolon-tactical
-	     (not (coq-smie-is-ltacdef))
-	     (not (coq-smie-is-inside-parenthesized-tactic)))
-	(if (or (not (smie-rule-parent-p "; tactic"))
-		(and smie--parent
-		   (coq-smie--same-line-as-parent
-		    (nth 1 smie--parent) (point))))
+       ((equal token "; tactic")
+	(if (and (smie-rule-hanging-p)
+		 coq-indent-semicolon-tactical
+		 (not (coq-smie-is-ltacdef))
+		 (not (coq-smie-is-inside-parenthesized-tactic))
+		 (or (not (smie-rule-parent-p "; tactic"))
+		     (and smie--parent
+			  (coq-smie--same-line-as-parent
+			   (nth 1 smie--parent) (point)))))
 	    coq-indent-semicolon-tactical
 	  nil))
 
