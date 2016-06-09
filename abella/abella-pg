@@ -1,0 +1,10 @@
+#!/bin/sh
+
+command -v emacs >/dev/null 2>&1 || { \
+  echo "Emacs needs to be installed" >&2 ; \
+  exit 2 ; \
+}
+
+export ABELLAPG_HOME=`cd $(dirname $0) && pwd -P`
+
+emacs --quick --load $ABELLAPG_HOME/abella-pg.el $*
