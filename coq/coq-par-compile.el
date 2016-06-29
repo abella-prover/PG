@@ -486,9 +486,10 @@ this buffer visible and returns a string."
 	  (with-current-buffer coq-compile-response-buffer (insert output)))
 	(coq-display-compile-response-buffer)
 	"unsatisfied dependencies")
-    (if (string-match ": \\(.*\\)$" output)
-	(cdr-safe (split-string (match-string 1 output)))
-      ())))
+    (when (string-match "\\`.*: " output)
+      (cl-remove-if-not
+       (lambda (f) (string-match-p "\\.vo?\\'" f))
+       (cdr-safe (split-string (substring output (match-end 0))))))))
 
 (defun coq-par-get-library-dependencies (lib-src-file coq-load-path
 						      &optional command-intro)
@@ -1052,7 +1053,7 @@ If the new job is a clone job, its state is
   a queue dependency QUEUE-DEP (which cannot be ready yet)
 - 'ready otherwise
 
-If the new job is a 'file job it's state is 'enqueued-coqdep. If
+If the new job is a 'file job its state is 'enqueued-coqdep. If
 there is space, coqdep is started immediately, otherwise the new
 job is put into the compilation queue.
 
