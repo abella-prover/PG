@@ -711,7 +711,7 @@ of a common interface mechanism.
 To get more from Proof General and adapt it to your liking, it helps to
 know a little bit about how Emacs lisp packages can be customized via
 the Customization mechanism.  It's really easy to use.  For details,
-@pxref{How to customize}.  @inforef{Customization, ,(emacs)},
+@pxref{How to customize}.  @inforef{Customization, ,emacs},
 for documentation in Emacs.
 
 To get the absolute most from Proof General, to improve it or to adapt
@@ -1548,7 +1548,7 @@ As experienced Emacs users will know, a @i{prefix argument} is a numeric
 argument supplied by some key sequence typed before a command key
 sequence.  You can supply a specific number by typing @key{Meta} with
 the digits, or a ``universal'' prefix of @kbd{C-u}.  See
-@inforef{Arguments, ,(emacs)} for more details.  Several Proof General
+@inforef{Arguments, ,emacs} for more details.  Several Proof General
 commands, like @code{proof-retract-until-point-interactive}, may accept
 a @i{prefix argument} to adjust their behaviour somehow.
 
@@ -2864,7 +2864,7 @@ This is an inherent problem with outline because it works by modifying
 the buffer.  If you want to use outline with processed scripts, you
 can turn off the @code{Strict Read Only} option. 
 
-See @inforef{Outline Mode, ,(emacs)} for more information about outline mode.
+See @inforef{Outline Mode, ,emacs} for more information about outline mode.
 
 @node Support for completion
 @section Support for completion
@@ -2960,7 +2960,7 @@ General doesn't do this automatically.
 Apart from completion, there are several other operations on tags.  One
 common one is replacing identifiers across all files using
 @code{tags-query-replace}.  For more information on how to use tags,
-@inforef{Tags, ,(emacs)}.
+@inforef{Tags, ,emacs}.
 
 To use tags for completion at the same time as the completion mechanism
 mentioned already, you can use the command @kbd{M-x add-completions-from-tags-table}.
@@ -3316,7 +3316,7 @@ Proof General has been fully loaded.  Proof General is fully loaded when
 you visit a script file for the first time, or if you type @kbd{M-x
 load-library RET proof RET}.
 
-For more help with customize, see @inforef{Customization, ,(emacs)}.
+For more help with customize, see @inforef{Customization, ,emacs}.
 
 
 
@@ -4028,11 +4028,17 @@ when a file is loaded. File variables and their values
 are written as a list at the end of
 the file.
 
-@emph{Remarque 1:} The examples in the following are for Coq but the
+@emph{Remark 1:} The examples in the following are for Coq but the
 trick is applicable to other provers. 
 
-@emph{Remarque 2:} For Coq specifically there is a recommended other way
-of configuring coq options: project files (@ref{Using the Coq project file}).
+@emph{Remark 2:} For Coq specifically, there is a recommended other way
+of configuring Coq options:
+project files (@ref{Using the Coq project file}).
+Actually, project files are intended to be included in the
+distribution of a library (and included in its repository), so the Coq
+options specified in project files are supposed to work for all users.
+In contrast, user-defined options such as @code{coq-prog-name} should
+preferably be specified in a directory-local-variables file (see below).
 
 For example, in Coq projects involving multiple directories, it is necessary
 to set the variable @code{coq-load-path} 
@@ -4098,13 +4104,26 @@ The value in this file must be an alist that maps mode names to alists,
 where these latter alists map variables to values. You can aso put
 arbitrary code in this file @inforef{Directory Variables, ,emacs}.
 
+Regarding the configuration of the @code{coq-prog-name} variable, the
+@code{.dir-locals.el} file should contain something like:
+
+@lisp
+((coq-mode . ((coq-prog-name . ".../path/to/coqtop"))))
+@end lisp
+
+@emph{Note:} if you add such content to the @code{.dir-locals.el} file
+you should restart Emacs to take this change into account (or
+just run @kbd{M-x proof-shell-exit RET yes RET}
+and @kbd{M-x normal-mode RET} in the Coq buffer
+before restarting the Coq process).
+
 
 
 @node Using abbreviations
 @section Using abbreviations
 
 A very useful package of Emacs supports automatic expansions of
-abbreviations as you type, @inforef{Abbrevs, ,(emacs)}.
+abbreviations as you type, @inforef{Abbrevs, ,emacs}.
 
 For example, the proof assistant Coq has many command strings that are
 long, such as ``reflexivity,'' ``Inductive,'' ``Definition'' and
@@ -4708,34 +4727,47 @@ path of @code{coqdep}.
 Non-standard coq library load path.@*
 This list specifies the LoadPath extension for coqdep, coqc and
 coqtop. Usually, the elements of this list are strings (for
-"-I") or lists of two strings (for "-R" dir "-as" path).
+"-I") or lists of two strings (for "-R" dir path and
+"-Q" dir path).
 
-The possible forms of elements of this list correspond to the 3
-forms of include options ('-I' and @code{'-R'}). An element can be
+The possible forms of elements of this list correspond to the 4
+forms of include options (@samp{-I} @samp{-Q} and @samp{-R}). An element can be
 @lisp
-  - A string, specifying a directory to be mapped to the empty
-    logical path ('-I').
-  - A list of the form '(rec dir path)' (where dir and path are
+  - A list of the form @samp{(}ocamlimport dir)', specifying (in 8.5) a
+    directory to be added to ocaml path (@samp{-I}).
+  - A list of the form @samp{(}rec dir path)' (where dir and path are
     strings) specifying a directory to be recursively mapped to the
-    logical path @code{'path'} ('-R dir -as path').
-  - A list of the form '(nonrec dir path)', specifying a directory
-    to be mapped to the logical path @code{'path'} ('-I dir -as path').
+    logical path @samp{path} (@samp{-R dir path}).
+  - A list of the form @samp{(}recnoimport dir path)' (where dir and
+    path are strings) specifying a directory to be recursively
+    mapped to the logical path @samp{path} (@samp{-Q dir path}), but not
+    imported (modules accessible for import with qualified names
+    only).  Note that -Q dir "" has a special, nonrecursive meaning.
+  - A list of the form (8.4 only) @samp{(}nonrec dir path)', specifying a
+    directory to be mapped to the logical path @code{'path'} ('-I dir -as path').
 @end lisp
-For convenience the symbol @code{'rec'} can be omitted and entries of
-the form '(dir path)' are interpreted as '(rec dir path)'.
+For convenience the symbol @samp{rec} can be omitted and entries of
+the form @samp{(dir path)} are interpreted as @samp{(rec dir path)}.
+
+A plain string maps to -Q ... "" in 8.5, and -I ... in 8.4.
 
 Under normal circumstances this list does not need to
 contain the coq standard library or "." for the current
 directory (see @samp{@code{coq-load-path-include-current}}).
+
+@var{warning}: if you use coq <= 8.4, the meaning of these options is
+not the same (-I is for coq path).
 @end defvar
 
 
 @c TEXI DOCSTRING MAGIC: coq-load-path-include-current
 @defvar coq-load-path-include-current 
 If @samp{t} let coqdep search the current directory too.@*
-Should be @samp{t} for normal users. If @samp{t} pass "-I dir" to coqdep when
+Should be @samp{t} for normal users. If @samp{t} pass -Q dir "" to coqdep when
 processing files in directory "dir" in addition to any entries
 in @samp{@code{coq-load-path}}.
+
+This setting is only relevant with Coq < 8.5.
 @end defvar
 
 
