@@ -10,25 +10,37 @@
 
 (defconst abella-core-font-lock-keywords
   '(
-    ("\\(=>\\||-\\|[][{}]\\)"            . font-lock-builtin-face)
-    ;; (regexp-opt '("->" ":=" ":" ";" "." "," "/\\" "\\/" "=" "\\"))
-    ("\\(?:->\\|/\\\\\\|:=\\|\\\\/\\|[,.:;=\\]\\)"
-       . font-lock-builtin-face)
-    ("\\<\\(kind\\|type\\|forall\\|exists\\|nabla\\|true\\|pi\\)\\>"
-       . font-lock-keyword-face))
+    ;; (regexp-opt '("=>" "|-" "[" "]" "{" "}" "&") 'symbols)
+    ("\\_<\\(=>\\||-\\|[]&[{}]\\)\\_>"
+     . font-lock-builtin-face)
+    ;; (regexp-opt '("->" ":=" ":" ";" "." "," "/\\" "\\/" "=" "\\") 'symbols)
+    ("\\_<\\(->\\|/\\\\\\|:=\\|\\\\/\\|[,.:;=\\]\\)\\_>"
+     . font-lock-builtin-face)
+    ;; (regexp-opt '("kind" "type" "forall" "exists" "nabla" "true" "pi") 'words)
+    ("\\<\\(exists\\|forall\\|kind\\|nabla\\|pi\\|t\\(?:\\(?:ru\\|yp\\)e\\)\\)\\>"
+     . font-lock-keyword-face)
+    )
   "Abella core language font-lock keywords")
 
 (defconst abella-reasoning-font-lock-keywords
-  '(;; (regexp-opt '("Set" "Query" "Show") 'words)
-    ("\\<\\(Query\\|S\\(?:et\\|how\\)\\)\\>"     . font-lock-builtin-face)
-    ("\\<\\(Import\\|Specification\\)\\>"        . font-lock-builtin-face)
-    ("\\<\\(Type\\|Kind\\|Close\\)\\>"           . font-lock-keyword-face)
-    ("\\<\\(\\(?:Co\\)?Define\\|Schema\\|Inductive\\|by\\)\\>" . font-lock-keyword-face)
-    ("\\<\\(Theorem\\|Split\\)\\>"               . font-lock-keyword-face)
-    ("\\<\\(skip\\|undo\\|abort\\)\\>"           . font-lock-warning-face)
-    ;; (regexp-opt '("{" "}" "|-" "[" "]" "=>"))
+  '(
+    ;; (regexp-opt '("Set" "Query" "Show") 'words)
+    ("\\<\\(Query\\|S\\(?:et\\|how\\)\\)\\>"
+     . font-lock-builtin-face)
+    ;; (regexp-opt '("Import" "Specification") 'words)
+    ("\\<\\(Import\\|Specification\\)\\>"
+     . font-lock-builtin-face)
+    ("\\<\\(Type\\|Kind\\|Close\\)\\>"
+     . font-lock-keyword-face)
+    ("\\<\\(\\(?:Co\\)?Define\\|Schema\\|Inductive\\|by\\)\\>"
+     . font-lock-keyword-face)
+    ("\\<\\(Theorem\\|Split\\)\\>"
+     . font-lock-keyword-face)
+    ("\\<\\(skip\\|undo\\|abort\\)\\>"
+     . font-lock-warning-face)
     ;; (regexp-opt '("abbrev" "all" "apply" "assert" "backchain" "case" "clear" "coinduction" "cut" "induction" "inst" "intros" "keep" "left" "monotone" "on" "permute" "rename" "right" "search" "split" "split*" "to" "unabbrev" "unfold" "with" "witness") 'words)
-    ("\\<\\(a\\(?:bbrev\\|ll\\|pply\\|ssert\\)\\|backchain\\|c\\(?:ase\\|lear\\|oinduction\\|ut\\)\\|in\\(?:duction\\|st\\|tros\\)\\|keep\\|left\\|monotone\\|on\\|permute\\|r\\(?:ename\\|ight\\)\\|s\\(?:earch\\|plit\\*?\\)\\|to\\|un\\(?:abbrev\\|fold\\)\\|wit\\(?:h\\|ness\\)\\)\\>" . font-lock-function-name-face)
+    ("\\<\\(a\\(?:bbrev\\|ll\\|pply\\|ssert\\)\\|backchain\\|c\\(?:ase\\|lear\\|oinduction\\|ut\\)\\|in\\(?:duction\\|st\\|tros\\)\\|keep\\|left\\|monotone\\|on\\|permute\\|r\\(?:ename\\|ight\\)\\|s\\(?:earch\\|plit\\*?\\)\\|to\\|un\\(?:abbrev\\|fold\\)\\|wit\\(?:h\\|ness\\)\\)\\>"
+     . font-lock-function-name-face)
     )
   "Abella reasoning level font-lock keywords")
 

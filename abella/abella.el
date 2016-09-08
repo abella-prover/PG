@@ -68,12 +68,6 @@
   (setq cmd (span-property span 'cmd))
   (cond
     ((eq cmd nil) "") ; comment
-    ;; ((string-match "Specification.*" cmd) "Reset.")
-    ;; ((string-match "Theorem.*" cmd) "abort.")
-    ;; ((string-match
-    ;;   "\\(Define\\|CoDefine\\|Kind\\|Type\\|Split\\|Close\\).*"
-    ;;   cmd) "Back.")
-    ;; (t "undo."))
     (t " #back."))
   )
 
