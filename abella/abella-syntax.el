@@ -32,7 +32,7 @@
      . font-lock-builtin-face)
     ("\\<\\(Type\\|Kind\\|Close\\)\\>"
      . font-lock-keyword-face)
-    ("\\<\\(\\(?:Co\\)?Define\\|Schema\\|Inductive\\|by\\)\\>"
+    ("\\<\\(\\(?:Co\\)?Define\\|Recursive\\|Schema\\|Inductive\\|by\\)\\>"
      . font-lock-keyword-face)
     ("\\<\\(Theorem\\|Split\\)\\>"
      . font-lock-keyword-face)
