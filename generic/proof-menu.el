@@ -1,32 +1,31 @@
 ;;; proof-menu.el --- Menus, keymaps, misc commands for Proof General
-;;
-;; Copyright (C) 2000,2001,2009,2010,2011 LFCS Edinburgh.
-;; Authors:   David Aspinall
-;; License:   GPL (GNU GENERAL PUBLIC LICENSE)
-;;
-;; $Id$
-;;
 
-(require 'cl)				; mapcan
+;; This file is part of Proof General.
+
+;; Portions © Copyright 1994-2012  David Aspinall and University of Edinburgh
+;; Portions © Copyright 2003, 2012, 2014  Free Software Foundation, Inc.
+;; Portions © Copyright 2001-2017  Pierre Courtieu
+;; Portions © Copyright 2010, 2016  Erik Martin-Dorel
+;; Portions © Copyright 2011-2013, 2016-2017  Hendrik Tews
+;; Portions © Copyright 2015-2017  Clément Pit-Claudel
+
+;; Authors:   David Aspinall
+
+;; License:   GPL (GNU GENERAL PUBLIC LICENSE)
+
+;;; Commentary:
+;;
 
 ;;; Code:
-(eval-when (compile)
-  (defvar proof-assistant-menu nil) ; defined by macro in proof-menu-define-specific
-  (defvar proof-mode-map nil))
-
-(require 'proof-utils)    ; proof-deftoggle, proof-eval-when-ready-for-assistant
-(require 'proof-useropts)
-(require 'proof-config)
-
-
-    
-
+(require 'cl)				; mapcan
 
 (eval-when-compile
   (defvar proof-assistant-menu)	  ; defined by macro in proof-menu-define-specific
   (defvar proof-mode-map))
-    
 
+(require 'proof-utils)    ; proof-deftoggle, proof-eval-when-ready-for-assistant
+(require 'proof-useropts)
+(require 'proof-config)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;
@@ -123,6 +122,7 @@ without adjusting window layout."
   ;; C-c C-v is proof-minibuffer-cmd in universal-keys
   ;; C-c C-. is proof-goto-end-of-locked in universal-keys
   (define-key map [(control c) (control return)] 'proof-goto-point)
+  (define-key map [(control c) (control m)] 'proof-goto-point) ; fallback for tty
   (define-key map [(control c) ?v] 'pg-toggle-visibility)
   (define-key map [(control meta mouse-3)] 'proof-mouse-goto-point)
   ;; NB: next binding overwrites comint-find-source-code.
@@ -339,8 +339,7 @@ without adjusting window layout."
   (proof-deftoggle-fn
    (proof-ass-sym unicode-tokens-enable) 'proof-unicode-tokens-toggle)
   (proof-deftoggle-fn
-   (proof-ass-sym maths-menu-enable) 'proof-maths-menu-toggle)
-  (proof-deftoggle-fn (proof-ass-sym mmm-enable) 'proof-mmm-toggle))
+   (proof-ass-sym maths-menu-enable) 'proof-maths-menu-toggle))
 
 (defun proof-keep-response-history ()
   "Enable associated buffer histories following `proof-keep-response-history'."
@@ -391,7 +390,7 @@ without adjusting window layout."
        :style radio
        :selected (eq proof-autosend-all nil)
        :active proof-autosend-enable
-       :help "Automatically try out the next commmand"]
+       :help "Automatically try out the next command"]
        ["Send Whole Buffer"
 	(customize-set-variable 'proof-autosend-all t)
 	:style radio
@@ -535,12 +534,6 @@ without adjusting window layout."
       :selected (and (boundp 'maths-menu-mode) maths-menu-mode)
       :help "Maths menu for inserting Unicode characters"]
 
-     ["Multiple Modes" (proof-mmm-toggle (if mmm-mode 0 1))
-      :active (proof-mmm-support-available)
-      :style toggle
-      :selected (and (boundp 'mmm-mode) mmm-mode)
-      :help "Allow multiple major modes"]
-
      ["Index Menu" proof-imenu-toggle
       :active (stringp (locate-library "imenu"))
       :style toggle
@@ -588,7 +581,6 @@ without adjusting window layout."
    'proof-strict-read-only
    (proof-ass-sym unicode-tokens-enable)
    (proof-ass-sym maths-menu-enable)
-   (proof-ass-sym mmm-enable)
    'proof-toolbar-enable
    'proof-keep-response-history
    'proof-imenu-enable
@@ -921,8 +913,10 @@ KEY is the optional key binding."
 
 (defun proof-settings-vars ()
   "Return a list of proof assistant setting variables."
-  (mapcar (lambda (setting) (proof-ass-symv (car setting)))
-	  proof-assistant-settings))
+  (append
+   (mapcar (lambda (setting) (proof-ass-symv (car setting)))
+	   proof-assistant-settings)
+   proof-assistant-additional-settings))
 
 (defun proof-settings-changed-from-defaults-p ()
   ;; FIXME: would be nice to add.  Custom support?

@@ -1,9 +1,18 @@
-;; coq-system.el --- common part of compilation feature
-;; Copyright (C) 2015 LFCS Edinburgh.
+;;; coq-system.el --- common part of compilation feature
+
+;; This file is part of Proof General.
+
+;; Portions © Copyright 1994-2012  David Aspinall and University of Edinburgh
+;; Portions © Copyright 2003, 2012, 2014  Free Software Foundation, Inc.
+;; Portions © Copyright 2001-2017  Pierre Courtieu
+;; Portions © Copyright 2010, 2016  Erik Martin-Dorel
+;; Portions © Copyright 2011-2013, 2016-2017  Hendrik Tews
+;; Portions © Copyright 2015-2017  Clément Pit-Claudel
+
 ;; Authors: Hendrik Tews, Pierre Courtieu
-;; License:     GPL (GNU GENERAL PUBLIC LICENSE)
 ;; Maintainer: Pierre.Courtieu<Pierre.Courtieu@cnam.fr>
-;;
+
+;; License:     GPL (GNU GENERAL PUBLIC LICENSE)
 
 ;;; Commentary:
 ;;
@@ -12,25 +21,36 @@
 ;; support for older versions of coq.
 ;;
 
+;;; Code:
+
 (require 'proof)
 
 (eval-when-compile
   (require 'cl)
-  (require 'proof-compat)
-  (proof-ready-for-assistant 'coq))
+  (require 'proof-compat))
 
-(eval-when (compile)
-  (defvar coq-prog-args nil)
-  (defvar coq-debug nil))
+(eval-when-compile
+  (defvar coq-prog-args)
+  (defvar coq-debug))
+
+;; Arbitrary arguments can already be passed through _CoqProject.
+;; However this is not true for all assistants, so we don't modify the
+;; (defpgcustom prog-args) declaration.
+(defun coq--string-list-p (obj)
+  "Determine if OBJ is a list of strings."
+  (or (null obj) (and (consp obj) (stringp (car obj)) (coq--string-list-p (cdr obj)))))
+
+(put 'coq-prog-args 'safe-local-variable #'coq--string-list-p)
 
 (defcustom coq-prog-env nil
-  "List of environment settings d to pass to Coq process.
+  "List of environment settings to pass to Coq process.
 On Windows you might need something like:
   (setq coq-prog-env '(\"HOME=C:\\Program Files\\Coq\\\"))"
   :group 'coq)
 
 (defcustom coq-prog-name
-  (proof-locate-executable "coqtop" t '("C:/Program Files/Coq/bin"))
+  (if (executable-find "coqtop") "coqtop"
+    (proof-locate-executable "coqtop" t '("C:/Program Files/Coq/bin")))
   "*Name of program to run as Coq. See `proof-prog-name', set from this.
 On Windows with latest Coq package you might need something like:
    C:/Program Files/Coq/bin/coqtop.opt.exe
@@ -42,22 +62,26 @@ See also `coq-prog-env' to adjust the environment."
   :group 'coq)
 
 (defcustom coq-dependency-analyzer
-  (proof-locate-executable "coqdep" t '("C:/Program Files/Coq/bin"))
+  (if (executable-find "coqdep") "coqdep"
+    (proof-locate-executable "coqdep" t '("C:/Program Files/Coq/bin")))
   "Command to invoke coqdep."
   :type 'string
   :group 'coq)
 
 (defcustom coq-compiler
-  (proof-locate-executable "coqc" t '("C:/Program Files/Coq/bin"))
+  (if (executable-find "coqc") "coqc"
+    (proof-locate-executable "coqc" t '("C:/Program Files/Coq/bin")))
   "Command to invoke the coq compiler."
   :type 'string
   :group 'coq)
 
 (defun get-coq-library-directory ()
-  (let ((c (substring (shell-command-to-string (concat coq-prog-name " -where")) 0 -1 )))
-    (if (string-match "not found" c)
-        "/usr/local/lib/coq"
-      c)))
+  (let ((default-directory
+	  (if (file-accessible-directory-p default-directory)
+	      default-directory
+	    "/")))
+    (or (ignore-errors (car (process-lines coq-prog-name "-where")))
+	"/usr/local/lib/coq")))
 
 (defconst coq-library-directory (get-coq-library-directory) ;; FIXME Should be refreshed more often
   "The coq library directory, as reported by \"coqtop -where\".")
@@ -69,13 +93,30 @@ See also `coq-prog-env' to adjust the environment."
 
 (defcustom coq-pinned-version nil
   "Which version of Coq you are using.
-There should be no need to set this value; Proof General can
-adjust to various releases of Coq automatically."
+There should be no need to set this value unless you use the trunk from
+the Coq github repository. For Coq versions with decent version numbers
+Proof General detects the version automatically and adjusts itself. This
+variable should contain nil or a version string."
   :type 'string
   :group 'coq)
 
 (defvar coq-autodetected-version nil
   "Version of Coq, as autodetected by `coq-autodetect-version'.")
+
+;;; error symbols
+
+;; coq-unclassifiable-version
+;;
+;; This error is signaled with one data item -- the bad version string
+
+(put 'coq-unclassifiable-version 'error-conditions
+     '(error coq-unclassifiable-version))
+
+(put 'coq-unclassifiable-version 'error-message
+     "Proof General cannot classify your Coq version")
+
+
+;;; version detection code
 
 (defun coq-version (&optional may-recompute)
   "Return the precomputed version of the current Coq toolchain.
@@ -103,7 +144,11 @@ Interactively (with INTERACTIVE-P), show that number."
     ;; Use `shell-command' via `find-file-name-handler' instead of
     ;; `process-line': when the buffer is running TRAMP, PG uses
     ;; `start-file-process', loading the binary from the remote server.
-    (let* ((coq-command (shell-quote-argument (or coq-prog-name "coqtop")))
+    (let* ((default-directory
+	     (if (file-accessible-directory-p default-directory)
+		 default-directory
+	       "/"))
+	   (coq-command (shell-quote-argument (or coq-prog-name "coqtop")))
            (shell-command-str (format "%s -v" coq-command))
            (fh (find-file-name-handler default-directory 'shell-command))
            (retv (if fh (funcall fh 'shell-command shell-command-str (current-buffer))
@@ -135,7 +180,26 @@ version detection that Proof General does automatically."
 (defun coq--pre-v85 ()
   "Return non-nil if the auto-detected version of Coq is < 8.5.
 Returns nil if the version can't be detected."
-  (coq--version< (or (coq-version t) "8.5") "8.5snapshot"))
+  (let ((coq-version-to-use (or (coq-version t) "8.5")))
+    (condition-case err
+	(coq--version< coq-version-to-use "8.5snapshot")
+      (error
+       (cond
+	((equal (substring (cadr err) 0 15) "Invalid version")
+	 (signal 'coq-unclassifiable-version  coq-version-to-use))
+	(t (signal (car err) (cdr err))))))))
+
+(defun coq--post-v86 ()
+  "Return t if the auto-detected version of Coq is >= 8.6.
+Return nil if the version cannot be detected."
+  (let ((coq-version-to-use (or (coq-version t) "8.5")))
+    (condition-case err
+	(not (coq--version< coq-version-to-use "8.6"))
+      (error
+       (cond
+	((equal (substring (cadr err) 0 15) "Invalid version")
+	 (signal 'coq-unclassifiable-version  coq-version-to-use))
+	(t (signal (car err) (cdr err))))))))
 
 (defcustom coq-use-makefile nil
   "Whether to look for a Makefile to attempt to guess the command line.
@@ -270,7 +334,7 @@ request compatibility handling of flags."
          (list "-R" (expand-file-name dir) alias)))
     (pcase entry
       ((and (pred stringp) dir)
-       (list "-Q" (expand-file-name dir) "\"\""))
+       (list "-Q" (expand-file-name dir) ""))
       (`(ocamlimport ,dir)
        (list "-I" (expand-file-name dir)))
       (`(recnoimport ,dir ,alias)
@@ -340,7 +404,7 @@ LOAD-PATH, CURRENT-DIRECTORY, PRE-V85: see `coq-include-options'."
 LOAD-PATH, CURRENT-DIRECTORY, PRE-V85: see `coq-include-options'."
   ;; coqtop always adds the current directory to the LoadPath, so don't
   ;; include it in the -Q options.
-  (append (remove "-emacs" (remove "-emacs-U" coq-prog-args))
+  (append (remove "-emacs" coq-prog-args)
           (let ((coq-load-path-include-current nil)) ; Not needed in >=8.5beta3
             (coq-coqdep-prog-args coq-load-path current-directory pre-v85))))
 
@@ -363,14 +427,15 @@ LOAD-PATH, CURRENT-DIRECTORY, PRE-V85: see `coq-coqc-prog-args'."
   (coq-coqtop-prog-args coq-load-path))
 
 (defcustom coq-use-project-file t
-  "If t, when opening a coq file read the dominating _CoqProject.
-If t, when a coq file is opened, Proof General will look for a
+  "If t, when opening a Coq file read the dominating _CoqProject.
+If t, when a Coq file is opened, Proof General will look for a
 project file (see `coq-project-filename') somewhere in the
 current directory or its parent directories.  If there is one,
 its contents are read and used to determine the arguments that
 must be given to coqtop.  In particular it sets the load
-path (including the -R lib options) (see `coq-load-path') ."
+path (including the -R lib options) (see `coq-load-path')."
   :type 'boolean
+  :safe 'booleanp
   :group 'coq)
 
 (defcustom coq-project-filename "_CoqProject"
@@ -387,6 +452,7 @@ variables may still be used to override the coq project file's
 configuration. .dir-locals.el files also work and override
 project file settings."
   :type 'string
+  :safe 'stringp
   :group 'coq)
 
 (defun coq-find-project-file ()
@@ -449,7 +515,7 @@ coqtop."
          (push opt args))
         (`("-arg" ,concatenated-args)
          (setq args
-               (append (split-string (cadr opt) coq--project-file-separator)
+               (append (split-string-and-unquote (cadr opt) coq--project-file-separator)
                        args)))))
     (cons "-emacs" args)))
 
@@ -608,7 +674,7 @@ then be set using local file variables."
             (setq coq-prog-args nil)
             (concat
              (substring command 0 (string-match " [^ ]*$" command))
-             "-emacs-U"))
+             "-emacs"))
         coq-prog-name))))
 
-;;; coq-compile-common.el ends here
+;;; coq-system.el ends here

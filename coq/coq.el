@@ -1,35 +1,48 @@
-;; coq.el --- Major mode for Coq proof assistant  -*- coding: utf-8 -*-
-;; Copyright (C) 1994-2009 LFCS Edinburgh.
+;;; coq.el --- Major mode for Coq proof assistant  -*- coding: utf-8 -*-
+
+;; This file is part of Proof General.
+
+;; Portions © Copyright 1994-2012  David Aspinall and University of Edinburgh
+;; Portions © Copyright 2003, 2012, 2014  Free Software Foundation, Inc.
+;; Portions © Copyright 2001-2017  Pierre Courtieu
+;; Portions © Copyright 2010, 2016  Erik Martin-Dorel
+;; Portions © Copyright 2011-2013, 2016-2017  Hendrik Tews
+;; Portions © Copyright 2015-2017  Clément Pit-Claudel
+
 ;; Authors: Healfdene Goguen, Pierre Courtieu
-;; License:     GPL (GNU GENERAL PUBLIC LICENSE)
 ;; Maintainer: Pierre Courtieu <Pierre.Courtieu@cnam.fr>
+
+;; License:     GPL (GNU GENERAL PUBLIC LICENSE)
+
+;;; Commentary:
 ;;
-;; $Id$
 
-
+;;; Code:
 
 (eval-when-compile
   (require 'cl)
   (require 'proof-compat))
 
-(eval-when (compile)
+(eval-when-compile
   (require 'proof-utils)
   (require 'span)
   (require 'outline)
   (require 'newcomment)
   (require 'etags)
   (unless (proof-try-require 'smie)
-    (defvar smie-indent-basic nil)
-    (defvar smie-rules-function nil))
-  (defvar proof-info nil)       ; dynamic scope in proof-tree-urgent-action
-  (defvar action nil)       ; dynamic scope in coq-insert-as stuff
-  (defvar string nil)       ; dynamic scope in coq-insert-as stuff
-  (defvar coq-auto-insert-as nil)    ; defpacustom
-  (defvar coq-time-commands nil)        ; defpacustom
-  (defvar coq-use-project-file t)        ; defpacustom
-  (defvar coq-use-editing-holes nil)    ; defpacustom
-  (defvar coq-hide-additional-subgoals nil) ; defpacustom
-  (proof-ready-for-assistant 'coq))     ; compile for coq
+    (defvar smie-indent-basic)
+    (defvar smie-rules-function))
+  (defvar proof-info)       ; dynamic scope in proof-tree-urgent-action
+  (defvar action)       ; dynamic scope in coq-insert-as stuff
+  (defvar string)       ; dynamic scope in coq-insert-as stuff
+  (defvar old-proof-marker)
+  (defvar coq-keymap)
+  (defvar coq-one-command-per-line)
+  (defvar coq-auto-insert-as)    ; defpacustom
+  (defvar coq-time-commands)        ; defpacustom
+  (defvar coq-use-project-file)        ; defpacustom
+  (defvar coq-use-editing-holes)    ; defpacustom
+  (defvar coq-hide-additional-subgoals))
 
 (require 'proof)
 (require 'coq-system)                   ; load path, option, project file etc.
@@ -39,7 +52,6 @@
 (require 'coq-abbrev)                   ; abbrev and coq specific menu
 (require 'coq-seq-compile)              ; sequential compilation of Requires
 (require 'coq-par-compile)              ; parallel compilation of Requires
-
 
 ;; for compilation in Emacs < 23.3 (NB: declare function only works at top level)
 (declare-function smie-bnf->prec2 "smie")
@@ -76,7 +88,7 @@
 ;;  :group 'coq)
 
 (defcustom coq-user-init-cmd nil
-  "user defined init commands for Coq.
+  "User defined init commands for Coq.
 These are appended at the end of `coq-shell-init-cmd'."
   :type '(repeat (cons (string :tag "command")))
   :group 'coq)
@@ -89,12 +101,12 @@ These are appended at the end of `coq-shell-init-cmd'."
 ;; Default coq is only Private_ and _subproof
 (defcustom coq-search-blacklist-string ; add this? \"_ind\" \"_rect\" \"_rec\" 
  "\"Private_\" \"_subproof\""
-  "String for blacklisting strings from requests to coq environment."
+  "String for blacklisting strings from requests to Coq environment."
   :type 'string
   :group 'coq)
 
 (defcustom coq-prefer-top-of-conclusion nil
-  "prefer start of the conclusion over its end when displaying goals
+  "Prefer start of the conclusion over its end when displaying goals
 that do not fit in the goals window."
   :type 'boolean
   :group 'coq)
@@ -304,27 +316,23 @@ See also `coq-hide-additional-subgoals'."
 ;; Derived modes
 ;;
 
-(eval-and-compile ;; FIXME: Why?
-  (define-derived-mode coq-shell-mode proof-shell-mode
-    "Coq Shell" nil
-    (coq-shell-mode-config)))
+(define-derived-mode coq-shell-mode proof-shell-mode
+  "Coq Shell" nil
+  (coq-shell-mode-config))
 
-(eval-and-compile ;; FIXME: Why?
-  (define-derived-mode coq-response-mode proof-response-mode
+(define-derived-mode coq-response-mode proof-response-mode
   "Coq Response" nil
-    (coq-response-config)))
+  (coq-response-config))
 
-(eval-and-compile ;; FIXME: Why?
-  (define-derived-mode coq-mode proof-mode "Coq"
-    "Major mode for Coq scripts.
+(define-derived-mode coq-mode proof-mode "Coq"
+  "Major mode for Coq scripts.
 
 \\{coq-mode-map}"
-    (coq-mode-config)))
+  (coq-mode-config))
 
-(eval-and-compile ;; FIXME: Why?
-  (define-derived-mode coq-goals-mode proof-goals-mode
-    "Coq Goals" nil
-    (coq-goals-mode-config)))
+(define-derived-mode coq-goals-mode proof-goals-mode
+  "Coq Goals" nil
+  (coq-goals-mode-config))
 
 ;; Indentation and navigation support via SMIE.
 
@@ -434,7 +442,8 @@ This is a subroutine of `proof-shell-filter'."
     (set-marker
      proof-shell-urgent-message-scanner
      (if end ;; couldn't find message start; move forward to avoid rescanning
-	 (max initstart
+         (max (or lastend 1) ;; goto after last end urgent msg
+              ;; or near the end of current output if that jumps farther.
 	      (- (point)
 		 (1+ proof-shell-eager-annotation-start-length)))
        ;; incomplete message; leave marker at start of message
@@ -886,7 +895,7 @@ Support dot.notation.of.modules."
         (if notation (concat "\"" notation "\"") ""))))
 
 (defcustom coq-remap-mouse-1 nil
-  "Wether coq mode should remap mouse button 1 to coq queries.
+  "Whether Coq mode should remap mouse button 1 to Coq queries.
 
 This overrides the default global binding of (control mouse-1) and
 (shift mouse-1) (buffers and faces menus). Hence it is nil by
@@ -937,13 +946,14 @@ Otherwise propose identifier at point if any."
      nil 'proof-minibuffer-history guess)))
 
 
-(defun coq-ask-do (ask do &optional dontguess postformatcmd)
+(defun coq-ask-do (ask do &optional dontguess postformatcmd wait)
   "Ask for an ident and print the corresponding term."
   (let* ((cmd) (postform (if (eq postformatcmd nil) 'identity postformatcmd)))
     (proof-shell-ready-prover)
     (setq cmd (coq-guess-or-ask-for-string ask dontguess))
     (proof-shell-invisible-command
-     (format (concat do " %s . ") (funcall postform cmd)))))
+     (format (concat do " %s . ") (funcall postform cmd))
+     wait)))
 
 
 (defun coq-flag-is-on-p (testcmd)
@@ -953,20 +963,29 @@ Otherwise propose identifier at point if any."
     (string-match "is on\\>" resp)))
 
 (defun coq-command-with-set-unset (setcmd cmd unsetcmd &optional postformatcmd testcmd)
-  "Play commands SETCMD then CMD and then silently UNSETCMD."
+  "Play commands SETCMD then CMD and then silently UNSETCMD. The
+last UNSETCMD is performed with tag 'empty-action-list so that it
+does not trigger 'proof-shell-empty-action (which dos \"Shwo\" at
+the time of writing this documentation)."
   (let* ((postform (if (eq postformatcmd nil) 'identity postformatcmd))
          (flag-is-on (and testcmd (coq-flag-is-on-p testcmd))))
+    ;; We put 'empty-action-list tags on all three commands since we don't want
+    ;; to trigger "Show" or anything that we usually insert after a group of
+    ;; commands.
     (unless flag-is-on (proof-shell-invisible-command
-                        (format " %s . " (funcall postform setcmd)) 'wait))
+                        (format " %s . " (funcall postform setcmd))
+                        nil nil 'no-response-display 'empty-action-list))
     (proof-shell-invisible-command
-     (format " %s . " (funcall postform cmd)) 'wait)
-    (unless flag-is-on (proof-shell-invisible-command-invisible-result
-                        (format " %s . " (funcall postform unsetcmd))))))
+     (format " %s . " (funcall postform cmd)) 'wait nil 'empty-action-list)
+    (unless flag-is-on (proof-shell-invisible-command
+                        (format " %s . " (funcall postform unsetcmd))
+                        'waitforit  nil 'no-response-display 'empty-action-list))))
 
 (defun coq-ask-do-set-unset (ask do setcmd unsetcmd
                                  &optional dontguess postformatcmd tescmd)
   "Ask for an ident id and execute command DO in SETCMD mode.
-More precisely it executes SETCMD, then DO id and finally silently UNSETCMD."
+More precisely it executes SETCMD, then DO id and finally
+silently UNSETCMD. See `coq-command-with-set-unset'."
   (let* ((cmd) (postform (if (eq postformatcmd nil) 'identity postformatcmd tescmd)))
     (proof-shell-ready-prover)
     (setq cmd (coq-guess-or-ask-for-string ask dontguess))
@@ -1036,15 +1055,6 @@ This is specific to `coq-mode'."
   (interactive)
   (coq-ask-do "SearchRewrite" "SearchRewrite" nil))
 
-;; TODO SearchAbout become Search in v8.5, change when V8.4 becomes old.
-(defun coq-SearchAbout ()
-  (interactive)
-  (coq-ask-do
-   ;; TODO: use [Add Search Blacklist "foo"] to exclude optionaly some patterns:
-   ;;  "_ind" "_rec" "R_" "_equation"
-   "SearchAbout (ex: \"eq_\" eq -bool)"
-   "SearchAbout")
-  (message "use [Coq/Settings/Search Blacklist] to change blacklisting."))
 
 
 
@@ -1196,8 +1206,8 @@ flag Printing All set."
   (coq-ask-do-show-all "Show goal number" "Show" t))
 
 ;; Check
-(eval-when (compile)
-  (defvar coq-auto-adapt-printing-width nil)); defpacustom
+(eval-when-compile
+  (defvar coq-auto-adapt-printing-width)); defpacustom
 
 ;; Since Printing Width is a synchronized option in coq (?) it is retored
 ;; silently to a previous value when retracting. So we reset the stored width
@@ -1208,7 +1218,7 @@ flag Printing All set."
 ;; we can remove this.
 (defun coq-set-auto-adapt-printing-width (&optional symb val); args are for :set compatibility
   "Function called when setting `auto-adapt-printing-width'"
-  (setq symb val)
+  (setq symb val) ;; FIXME this is wrong (it should be 'set', but it would set nil sometimes)
   (if coq-auto-adapt-printing-width
       (progn
         (add-hook 'proof-assert-command-hook 'coq-adapt-printing-width)
@@ -1216,7 +1226,41 @@ flag Printing All set."
     (remove-hook 'proof-assert-command-hook 'coq-adapt-printing-width)
     (remove-hook 'proof-retract-command-hook 'coq-reset-printing-width)))
 
-
+;; In case of nested proofs (which are announced as obsolete in future versions
+;; of coq) Coq does not show the goals of enclosing proof when closing a nested
+;; proof. This is coq's proof-shell-empty-action-list-command function which
+;; inserts a "Show" if the last command of an action list is a save command and
+;; there is more than one open proof before that save. If you want to issue a
+;; command and *not* have the goal redisplayed, the command must be tagged with
+;; 'empty-action-list.
+(defun coq-empty-action-list-command (cmd)
+  "Return the list of commands to send to coq after CMD if it is
+the last command of the action list.
+If CMD is tagged with 'empty-action-list then this function won't
+be called and no command will be sent to coq. "
+  (cond
+   ((or
+     ;; If closing a nested proof, Show the enclosing goal.
+     (and (string-match coq-save-command-regexp-strict cmd)
+          (> (length coq-last-but-one-proofstack) 1))
+     ;; If user issued a printing option then t printing. 
+     (and (string-match "\\(S\\|Uns\\)et\\s-+Printing" cmd)
+          (> (length coq-last-but-one-proofstack) 0)))
+    (list "Show."))
+   ((or
+     ;; if we go back in the buffer and that the number of abort is less than
+     ;; the number of nested goals, then Unset Silent and Show the goal
+     (and (string-match "Backtrack\\s-+[[:digit:]]+\\s-+[[:digit:]]+\\(\\s-+[[:digit:]]*\\)" cmd)
+          (> (length (coq-get-span-proofstack (proof-last-locked-span)))
+             ;; the number of aborts is the third arg of Backtrack.
+             (string-to-number (match-string 1 cmd)))))
+    (list "Unset Silent." "Show."))
+   ((or
+     ;; If we go back in the buffer and not in the above case, then only Unset
+     ;; silent (there is no goal to show).
+     (string-match "Backtrack" cmd))
+    (list "Unset Silent."))))
+  
 (defpacustom auto-adapt-printing-width t
   "If non-nil, adapt automatically printing width of goals window.
 Each timme the user sends abunch of commands to Coq, check if the
@@ -1318,26 +1362,371 @@ goal is redisplayed."
          (rd (read-number (format "Width (%S): " deflt) deflt)))
     (coq-adapt-printing-width t rd)))
 
+;;;;; utils fo overlays
+(defun coq-overlays-at (pt prop)
+  (let ((overlays (overlays-at pt))
+        found)
+    (while overlays
+      (let ((overlay (car overlays)))
+        (if (overlay-get overlay prop)
+            (setq found (cons overlay found))))
+      (setq overlays (cdr overlays)))
+    found))
 
-(defvar coq-highlight-id-last-regexp nil)
+;;;;;;;;;; Hypothesis tracking ;;;;;;;;;;
+;;; Facilities to build overlays for hyp names and hyp+type.
+;;; These are built on-demand: 
+;; - hyp names overlays are always (proof-shell-handle-delayed-output-hook)
+;; - hyp+type overlays are built when hiding a hypothesis, then it is not
+;; destroyed until the goals buffer is changed
 
-(defun coq-highlight-id-in-goals (re)
-  (with-current-buffer proof-goals-buffer
-    (highlight-regexp re 'lazy-highlight)))
+(defvar coq-hyps-positions nil
+  "The list of positions of hypothesis in the goals buffer.
+Maintained by a hook in `proof-shell-handle-delayed-output-hook'.")
 
-(defun coq-unhighlight-id-in-goals (re)
-  (with-current-buffer proof-goals-buffer
-    (unhighlight-regexp re)))
+(defun coq-find-hyp-overlay (h)
+  "Finds the hyp+type overlay for hyp H, or nil."
+  (let* ((hyp-pos (assoc h coq-hyps-positions))
+         (hyp-beg (cadr hyp-pos))
+         (hyp-end (caddr hyp-pos))
+         (hyp-overlay-already
+          (and hyp-beg
+               (car (with-current-buffer proof-goals-buffer
+                      (coq-overlays-at hyp-beg 'hyp))))))
+    hyp-overlay-already))
 
-(defun coq-highlight-id-at-pt-in-goals ()
+(defun coq-find-or-create-hyp-overlay (h)
+  "Finds the hyp+type overlay for hyp H, or create one."
+  (let* ((hyp-pos (assoc h coq-hyps-positions))
+         (hyp-beg (cadr hyp-pos))
+         (hyp-end (caddr hyp-pos))
+         (hyp-overlay-already
+          (and hyp-beg
+               (car (with-current-buffer proof-goals-buffer
+                      (coq-overlays-at hyp-beg 'hyp)))))
+         (hyp-overlay (and hyp-beg hyp-end
+                           (or hyp-overlay-already
+                               (make-overlay hyp-beg hyp-end proof-goals-buffer)))))
+    ;; if it was just created
+    (and hyp-overlay (overlay-put hyp-overlay 'hyp t))
+    hyp-overlay))
+
+(defun coq-find-hypname-overlay (h)
+  "Finds the hyp name overlay for hyp H."
+  (let* ((hyp-pos (assoc h coq-hyps-positions))
+         (hyp-beg (cadr hyp-pos))
+         (hyp-end (cadddr hyp-pos))
+         (hyp-overlay-already
+          (and hyp-beg
+               (car (with-current-buffer proof-goals-buffer
+                      (coq-overlays-at hyp-beg 'hypname))))))
+    hyp-overlay-already))
+
+(defun coq-find-or-create-hypname-overlay (h)
+  "Finds the hyp name overlay for hyp H, or create one."
+  (let* ((hyp-pos (assoc h coq-hyps-positions))
+         (hyp-beg (cadr hyp-pos))
+         (hyp-end (cadddr hyp-pos))
+         (hyp-overlay-already
+          (and hyp-beg
+               (car (with-current-buffer proof-goals-buffer
+                      (coq-overlays-at hyp-beg 'hypname)))))
+         (hyp-overlay (and hyp-beg hyp-end
+                           (or hyp-overlay-already
+                               (make-overlay hyp-beg hyp-end proof-goals-buffer)))))
+    ;; if it was just created
+    (and hyp-overlay (overlay-put hyp-overlay 'hypname t))
+    hyp-overlay))
+
+
+;;;;;;;;;;;;;; Highlighting hypothesis ;;;;;;;;
+;; Feature: highlighting of hyptohesis that remains when the cript is played
+;; (and goals buffer is updated).
+
+;; On by default. This only works with the SearchAbout function for now.
+(defvar coq-highlight-hyps-cited-in-response t
+  "If non-nil, try to highlight in goals buffers cited hyps response.")
+
+(defvar coq-hypname-visible-hovering t
+  "Whether hyp name overlays should be visible, and a help popup.
+In goals buffer, each hypothesis name has a clickable overlay.
+Making it highlited when hovering with mouse is nice to advertise
+the feature, but some people are allergic to this kind of
+distracting flickering. Possible values are: 'only-help,
+'only-highlight, nil, or t. Default is t, which means have both
+highlight and help echo.")
+
+;; We maintain a list of hypothesis names that must be highlighted at each
+;; regeneration of goals buffer.
+(defvar coq-highlighted-hyps nil
+  "List of hypothesis names that must be highlighted.
+These are rehighlighted at each regeneration of goals buffer
+using a hook in `proof-shell-handle-delayed-output-hook'.")
+
+(defvar coq-hypname-map (make-sparse-keymap) "Keymap for visible hypothesis")
+;; Ddefault binding: clicking on the name of an hyp hides it.
+(when coq-hypname-map 
+  (define-key coq-hypname-map [(mouse-3)] 'coq-toggle-hide-hyp-at-mouse)
+  (define-key coq-hypname-map [(mouse-2)] 'coq-insert-at-point-hyp-at-mouse))
+
+(defun coq-highlight-hyp-aux (h)
+  "Auxiliary function, use `coq-highlight-hyp' for sticky highlighting.
+Unless you want the highlighting to disappear after the goals
+buffer is updated."
+  (let ((hyp-overlay (coq-find-or-create-hyp-overlay h)))
+    (when hyp-overlay
+      (overlay-put hyp-overlay 'face '(:background "lavender"))
+      (overlay-put hyp-overlay 'invisible nil))))
+
+(defun coq-unhighlight-hyp-aux (h)
+  "Auxiliary function, use `coq-unhighlight-hyp' for sticky highlighting.
+Unless you want the highlighting to disappear after the goals
+buffer is updated."
+  (let* ((hyp-overlay-already (coq-find-hyp-overlay h)))
+    (when hyp-overlay-already
+      (overlay-put hyp-overlay-already 'face '(:background "unspecified-bg")))))
+
+(defun coq-highlight-hyp (h)
+  "Highlight hypothesis named H (sticky).
+use `coq-unhighlight-hyp' to unhilight."
+  (unless (member h coq-highlighted-hyps)
+    (setq coq-highlighted-hyps (cons h coq-highlighted-hyps)))
+  (coq-highlight-hyp-aux h))
+
+(defun coq-unhighlight-hyp (h)
+  "Unhighlight hypothesis named H."
+  (when (member h coq-highlighted-hyps)
+    (setq coq-highlighted-hyps (delete h coq-highlighted-hyps))
+    (coq-unhighlight-hyp-aux h)))
+
+(defun coq-highlight-hyps (lh)
+  (mapc 'coq-highlight-hyp lh))
+
+(defun coq-unhighlight-hyps (lh)
+  (mapc 'coq-unhighlight-hyp-aux lh))
+
+(defun coq-highlight-selected-hyps ()
+  "Highlight all hyps stored in `coq-highlighted-hyps'.
+This used in hook to rehilight hypothesis after goals buffer is
+updated."
   (interactive)
-  (let* ((id (coq-id-or-notation-at-point))
-         (re (regexp-quote (or id ""))))
-    (when coq-highlight-id-last-regexp
-      (coq-unhighlight-id-in-goals coq-highlight-id-last-regexp))
-    (coq-highlight-id-in-goals re)
-    (setq coq-highlight-id-last-regexp re)))
+  (coq-highlight-hyps coq-highlighted-hyps))
 
+(defun coq-unhighlight-selected-hyps ()
+  "Unhighlight all hyps stored in `coq-highlighted-hyps'.
+This used before updating `coq-highlighted-hyps' with a new set
+of hypothesis to highlight."
+  (interactive)
+  (coq-unhighlight-hyps coq-highlighted-hyps)
+  (setq coq-highlighted-hyps nil))
+
+(defun coq-get-hyps-cited-in-response ()
+  "Returns locations of hyps in goals buffer that are cited in response buffer.
+See `coq-highlight-hyps-cited-in-response' and `SearchAbout'."
+  (let ((hyps-cited (coq-detect-hyps proof-response-buffer)))
+    (remove-if-not
+     (lambda (e)
+       (cl-some;seq-find
+        (lambda (f)
+          (string-equal (car e) (car f)))
+        hyps-cited))
+     coq-hyps-positions)))
+
+(defun coq-highlight-hyps-cited-in-response ()
+  "Highlight hypothesis cited in response buffer.
+Highlight always takes place in goals buffer."
+  (let  ((inters (coq-get-hyps-cited-in-response)))
+    (coq-unhighlight-selected-hyps)
+    (setq coq-highlighted-hyps (mapcar 'car inters))
+    (coq-highlight-selected-hyps)))
+
+(defun coq-toggle-highlight-hyp (h)
+  "Toggle the highlighting status of hypothesis H.
+See  `coq-highlight-hyp'."
+  (interactive "sHypothesis name to highlight:")
+  (if (member h coq-highlighted-hyps)
+      (coq-unhighlight-hyp h)
+    (coq-highlight-hyp h)))
+
+(defun coq-highlight ()
+  "Toggle the hiding status of hypothesis H whose name is at point.
+See  `coq-hide-hyp'."
+  (interactive)
+  (coq-toggle-highlight-hyp
+   (substring-no-properties (coq-id-or-notation-at-point))))
+
+
+(defun coq-configure-hypname-overlay (hyp-overlay h)
+  (when hyp-overlay
+    (overlay-put hyp-overlay 'evaporate t)
+    (overlay-put hyp-overlay 'is-hyp-name t)
+    (overlay-put hyp-overlay 'hyp-name h)
+    ;; only for non allergic
+    (cond 
+     ((eq coq-hypname-visible-hovering 'only-help)
+      (overlay-put hyp-overlay 'help-echo "mouse-3: unhide; mouse-2 copy name"))
+     ((eq coq-hypname-visible-hovering 'only-highlight)
+      (overlay-put hyp-overlay 'mouse-face 'proof-command-mouse-highlight-face))
+     ((eq coq-hypname-visible-hovering t)
+      (overlay-put hyp-overlay 'mouse-face 'proof-command-mouse-highlight-face)
+      (overlay-put hyp-overlay 'help-echo "mouse-3: unhide; mouse-2 copy name")))
+    (overlay-put hyp-overlay 'keymap coq-hypname-map))
+  hyp-overlay)
+
+(defun coq-init-hypname-overlay (h)
+  (coq-configure-hypname-overlay (coq-find-or-create-hypname-overlay h) h))
+
+(defun coq-insert-at-point-hyp-at-mouse (event)
+  (interactive "e")
+  (let ((hyp-name (save-excursion
+                    (with-current-buffer proof-goals-buffer
+                      (save-excursion
+                        (overlay-get (car (overlays-at (posn-point (event-start event))))
+                                     'hyp-name))))))
+    (insert hyp-name)))
+
+;;;;;;;;;;; Hiding Hypothesis  ;;;;;;;;;;;
+(defvar coq-hidden-hyps nil
+  "List of hypothesis that should be hidden in goals buffer.
+These are re-hidden at each regeneration of goals buffer
+using a hook in `proof-shell-handle-delayed-output-hook'.")
+
+(defun coq-toggle-hide-hyp-at (pt)
+  "Toggle hiding the hypothesis at point."
+  (interactive)
+  (let ((hypname 
+         (or 
+          (overlay-get (car (coq-overlays-at pt 'is-hyp-name)) 'hyp-name)
+          (overlay-get (car (coq-overlays-at pt 'hyp)) 'hyp-name))))
+    (if (member hypname coq-hidden-hyps)
+        (coq-unhide-hyp hypname)
+      (coq-hide-hyp hypname))))
+
+(defun coq-toggle-hide-hyp-at-point ()
+  (coq-toggle-hide-hyp-at (point)))
+
+(defun coq-toggle-hide-hyp-at-mouse (event)
+  "Toggle hiding the hypothesis at mouse click.
+Used on hyptohesis overlays in goals buffer mainly."
+  (interactive "e")
+  (save-excursion
+    (with-current-buffer proof-goals-buffer
+      (save-excursion (coq-toggle-hide-hyp-at (posn-point (event-start event)))))))
+
+(defvar coq-hidden-hyp-map (make-sparse-keymap) "Keymap for hidden hypothesis")
+
+;; Ddefault binding: clicking on a hidden hyp with button 3 unhides it, with
+;; button 2 it copies hyp name at current point.
+(when coq-hidden-hyp-map 
+  (define-key coq-hidden-hyp-map [(mouse-3)] 'coq-toggle-hide-hyp-at-mouse)
+  (define-key coq-hidden-hyp-map [(mouse-2)] 'coq-insert-at-point-hyp-at-mouse))
+
+(defun coq-configure-hyp-overlay-hidden (hyp-overlay h)
+  (when hyp-overlay
+    (let ((prefx (save-excursion
+                   (with-current-buffer proof-goals-buffer
+                     (goto-char (overlay-start hyp-overlay))
+                     (search-forward-regexp ":")
+                     (if (looking-at "=") (concat h " := .......") (concat h " : ........"))))))
+      (overlay-put
+       hyp-overlay 'display 
+       (propertize prefx 'keymap coq-hidden-hyp-map)))
+    (overlay-put hyp-overlay 'evaporate t)
+    (overlay-put hyp-overlay 'mouse-face 'proof-command-mouse-highlight-face)
+    (overlay-put hyp-overlay 'help-echo "mouse-3: unhide; mouse-2 copy name")
+    (overlay-put hyp-overlay 'hyp-name h)
+    (overlay-put hyp-overlay 'keymap coq-hidden-hyp-map)))
+
+(defun coq-configure-hyp-overlay-visible (hyp-overlay h)
+  (when hyp-overlay
+    (overlay-put hyp-overlay 'display nil)
+    (overlay-put hyp-overlay 'evaporate t)
+    (overlay-put hyp-overlay 'mouse-face nil)
+    (overlay-put hyp-overlay 'help-echo nil)
+    (overlay-put hyp-overlay 'keymap nil)))
+
+(defun coq-hide-hyp-aux (h)
+  "Hide hypothesis H's type from the context temporarily.
+Displays \".......\" instead. This function relies on variable
+coq-hyps-positions. The hiding is cancelled as soon as the goals
+buffer is changed, consider using `coq-hide-hyp' if you want the
+hiding to be maintain when scripting/undoing."
+  (let ((hyp-overlay (coq-find-or-create-hyp-overlay h)))
+    (when hyp-overlay (coq-configure-hyp-overlay-hidden hyp-overlay h))))
+
+(defun coq-hide-hyp (h)
+  "Hide hypothesis H's type from the context durably.
+(displays \".......\" instead). This function relies on variable
+coq-hyps-positions. The hiding maintained as the goals buffer is
+changed, thanks to a hook on
+`proof-shell-handle-delayed-output-hook', consider using
+`coq-hide-hyp' if you want the hiding to be maintain when
+scripting/undoing."
+  (interactive)
+  (unless (member h coq-hidden-hyps)
+    (setq coq-hidden-hyps (cons h coq-hidden-hyps))
+    (coq-hide-hyp-aux h)))
+
+(defun coq-unhide-hyp-aux (h)
+"Unhide hypothesis H temporarily.
+See `coq-hide-hyp-aux'."
+    (let ((hyp-overlay (coq-find-or-create-hyp-overlay h)))
+      (coq-configure-hyp-overlay-visible hyp-overlay h)))
+
+(defun coq-unhide-hyp (h)
+"Unhide hypothesis H durably.
+See `coq-hide-hyp'."
+  (interactive)
+  (when (member h coq-hidden-hyps)
+    (setq coq-hidden-hyps (delete h coq-hidden-hyps))
+    (coq-unhide-hyp-aux h)))
+
+(defun coq-unhide-hyp-list (lh)
+    "Hide the type of hypothesis in LH temporarily.
+See `coq-unhide-hyp-aux'."
+  (mapc 'coq-unhide-hyp-aux lh))
+
+(defun coq-hide-hyp-list (lh)
+    "Hide the type of hypothesis in LH temporarily.
+See `coq-hide-hyp-aux'."
+  (mapc 'coq-hide-hyp-aux lh))
+
+(defun coq-hide-hyps ()
+    "Hide the type of hypothesis in LH durably.
+See `coq-hide-hyp'."
+  (interactive)
+  (coq-hide-hyp-list coq-hidden-hyps))
+
+
+(defun coq-unhide-hyps ()
+    "Unhide the type of hypothesis in LH durably.
+See `coq-unhide-hyp'."
+  (interactive)
+  (coq-unhide-hyp-list coq-hidden-hyps)
+  (setq coq-hidden-hyps nil))
+
+(defun coq-init-hypname-overlays (lh)
+  "(re)generate the overlays on hyps names.
+These overlays are used to allow hiding hypothesis by clicking on
+its name (button 3 should be the default). This is called by a
+hook in `proof-shell-handle-delayed-output-hook'."
+  (mapc 'coq-init-hypname-overlay (mapcar 'car lh)))
+
+(defun coq-toggle-hide-hyp (h)
+  "Toggle the hiding status of hypothesis H (asked interactively).
+See  `coq-hide-hyp'."
+  (interactive "sHypothesis to hide: ")
+  (if (member h coq-hidden-hyps)
+      (coq-unhide-hyp h)
+    (coq-hide-hyp h)))
+
+(defun coq-toggle-hide-hyp-at-point ()
+  "Toggle the hiding status of hypothesis H whose name is at point.
+See  `coq-hide-hyp'."
+  (interactive)
+  (coq-toggle-hide-hyp
+   (substring-no-properties (coq-id-or-notation-at-point))))
+;;;;;;;
 
 (proof-definvisible coq-PrintHint "Print Hint. ")
 
@@ -1354,6 +1743,12 @@ goal is redisplayed."
 (proof-definvisible coq-unset-printing-synth "Unset Printing Synth.")
 (proof-definvisible coq-set-printing-coercions "Set Printing Coercions.")
 (proof-definvisible coq-unset-printing-coercions "Unset Printing Coercions.")
+(proof-definvisible coq-set-printing-compact-contexts "Set Printing Compact Contexts.")
+(proof-definvisible coq-unset-printing-compact-contexts "Unset Printing Compact Contexts.")
+(proof-definvisible coq-set-printing-unfocused "Set Printing Unfocused.")
+(proof-definvisible coq-unset-printing-unfocused "Unset Printing Unfocused.")
+(proof-definvisible coq-set-printing-universes "Set Printing Universes.")
+(proof-definvisible coq-unset-printing-universes "Unset Printing Universes.")
 (proof-definvisible coq-set-printing-wildcards "Set Printing Wildcard.")
 (proof-definvisible coq-unset-printing-wildcards "Unset Printing Wildcard.")
 ; Takes an argument
@@ -1433,7 +1828,7 @@ Near here means PT is either inside or just aside of a comment."
     (cond
      ((coq-looking-at-comment)
       (coq-get-comment-region (point)))
-     ((and (looking-back proof-script-comment-end)
+     ((and (looking-back proof-script-comment-end nil)
            (save-excursion (forward-char -1) (coq-looking-at-comment)))
       (coq-get-comment-region (- (point) 1)))
      ((and (looking-at proof-script-comment-start)
@@ -1537,8 +1932,17 @@ Near here means PT is either inside or just aside of a comment."
         proof-goal-command "Goal %s. "
         proof-save-command "Save %s. "
         proof-find-theorems-command "Search %s. ")
+
+  (setq proof-shell-empty-action-list-command 'coq-empty-action-list-command)
+
 ;; FIXME da: Does Coq have a help or about command?
 ;;	proof-info-command "Help"
+
+  ;; Settings not defined with defpacustom because they have an unsupported
+  ;; type.
+  (setq proof-assistant-additional-settings
+        '(coq-compile-quick coq-compile-keep-going
+          coq-compile-auto-save coq-lock-ancestors))
 
   (setq proof-goal-command-p 'coq-goal-command-p
         proof-find-and-forget-fn 'coq-find-and-forget
@@ -1647,7 +2051,7 @@ Near here means PT is either inside or just aside of a comment."
    ;;        want xml like tags, and I want them removed before warning display.
    ;; I want the same for errors -> pgip
 
-   proof-shell-eager-annotation-end "\377\\|done\\]\\|</infomsg>\\|\\*\\*\\*\\*\\*\\*\\|) >" ; done
+   proof-shell-eager-annotation-end coq-shell-eager-annotation-end ; done
    proof-shell-annotated-prompt-regexp coq-shell-prompt-pattern
    proof-shell-result-start "\372 Pbp result \373"
    proof-shell-result-end "\372 End Pbp result \373"
@@ -1784,9 +2188,9 @@ Near here means PT is either inside or just aside of a comment."
 
 
 (defpacustom search-blacklist coq-search-blacklist-string
-  "Strings to blacklist in requests to coq environment."
+  "Strings to blacklist in requests to Coq environment."
   :type 'string
-  :get coq-search-blacklist-string
+  :get 'coq-get-search-blacklist
   :setting coq-set-search-blacklist)
 
 
@@ -1849,14 +2253,19 @@ not finished, because Coq 8.5 lists open existential variables
 as (new) open subgoals. For this test we assume that
 `proof-marker' has not yet been moved.
 
+The `proof-tree-urgent-action-hook' is also called for undo
+commands. For those, nothing is done.
+
 The not yet delayed output is in the region
 \[proof-shell-delayed-output-start, proof-shell-delayed-output-end]."
   ;; (message "CPTGNS start %s end %s"
   ;;          proof-shell-delayed-output-start
   ;;          proof-shell-delayed-output-end)
-  (with-current-buffer proof-shell-buffer
-    (let ((start proof-shell-delayed-output-start)
-          (end proof-shell-delayed-output-end))
+  (let ((start proof-shell-delayed-output-start)
+        (end proof-shell-delayed-output-end)
+        (state  (car proof-info)))
+  (when (> state proof-tree-last-state)
+    (with-current-buffer proof-shell-buffer
       ;; The message "All the remaining goals are on the shelf" is processed as
       ;; urgent message and is therefore before
       ;; proof-shell-delayed-output-start. We therefore need to go back to
@@ -1869,7 +2278,7 @@ The not yet delayed output is in the region
                 coq-proof-tree-additional-subgoal-ID-regexp end t)
           (let ((subgoal-id (match-string-no-properties 1)))
             (unless (gethash subgoal-id proof-tree-sequent-hash)
-              (message "CPTGNS new sequent %s found" subgoal-id)
+              ;; (message "CPTGNS new sequent %s found" subgoal-id)
               (setq proof-action-list
                     (cons (proof-shell-action-list-item
                            (coq-show-sequent-command subgoal-id)
@@ -1877,7 +2286,7 @@ The not yet delayed output is in the region
                            '(no-goals-display
                              no-response-display
                              proof-tree-show-subgoal))
-                          proof-action-list)))))))))
+                          proof-action-list))))))))))
   
 (add-hook 'proof-tree-urgent-action-hook 'coq-proof-tree-get-new-subgoals)
 
@@ -1912,6 +2321,103 @@ This is the Coq incarnation of `proof-tree-find-undo-position'."
       (setq span-res span-cur)
       (setq span-cur (span-at (1- (span-start span-cur)) 'type)))
     (span-start span-res)))
+
+
+;; In Coq 8.6 the evar line is disabled by default because on some proofs it
+;; causes a severe performance hit. The disabled evar line causes prooftree to
+;; crash with a parsing error. Proof General must therefore turn on the evar
+;; output with the command "Set Printing Dependent Evars Line". Of course,
+;; after the proof, the evar line must be set back to what it was before the
+;; proof. I therefore look in the urgent action hook if proof display is
+;; switched on or off. When switched on, I test the current evar printing
+;; status with the undodumented command "Test Printing Dependent Evars Line" to
+;; remember if I have to switch evar printing off eventually.
+
+(defvar coq--proof-tree-must-disable-evars nil
+  "Remember if evar printing must be disabled when leaving the current proof.")
+
+(defun coq-proof-tree-enable-evar-callback (span)
+  "Callback for the evar printing status test.
+This is the callback for the command ``Test Printing Dependent
+Evars Line''. It checks whether evar printing was off and
+remembers that fact in `coq--proof-tree-must-disable-evars'."
+  (with-current-buffer proof-shell-buffer
+    (save-excursion
+      ;; When the callback runs, the next item is sent to Coq already and
+      ;; therefore proof-marker points to the end of the next command
+      ;; already. proof-shell-filter-manage-output sets old-proof-marker
+      ;; before calling proof-shell-exec-loop, this therefore points to the
+      ;; end of the command of this callback.
+      (goto-char old-proof-marker)
+      (when (re-search-forward "The Printing Dependent Evars Line mode is "
+                               nil t)
+        (if (looking-at "off")
+            (progn
+              ;; (message "CPTEEC evar line mode was off")
+              (setq coq--proof-tree-must-disable-evars t))
+          ;; (message "CPTEEC evar line mode was on")
+          (setq coq--proof-tree-must-disable-evars nil))))))
+
+(defun coq-proof-tree-insert-evar-command (cmd &optional callback)
+  "Insert an evar printing command at the head of `proof-action-list'."
+  (push (proof-shell-action-list-item
+         (concat cmd " Printing Dependent Evars Line.")
+         (if callback callback 'proof-done-invisible)
+         (list 'invisible))
+        proof-action-list))
+
+(defun coq-proof-tree-enable-evars ()
+  "Enable the evar status line for Coq >= 8.6.
+Test the status of evar printing to be able to set it back
+properly after the proof and enable the evar printing."
+  (when (coq--post-v86)
+    ;; We push to proof-action-list --- therefore we need to push in reverse
+    ;; order!
+    (coq-proof-tree-insert-evar-command "Set")
+    (coq-proof-tree-insert-evar-command
+     "Test"
+     'coq-proof-tree-enable-evar-callback)))
+
+(defun coq-proof-tree-disable-evars ()
+  "Disable evar printing if necessary.
+This function switches off evar printing after the proof, if it
+was off before the proof. For undo commands, we rely on the fact
+that Coq itself undos the effect of the evar printing change that
+we inserted after the goal statement. We also rely on the fact
+that Proof General never backtracks into the middle of a
+proof. (If this would happen, Coq would switch evar printing on
+and the code here would not switch it off after the proof.)
+
+Being called from `proof-tree-urgent-action-hook', this function
+can rely on `proof-info' being dynamically bound to the last
+result of `coq-proof-tree-get-proof-info'."
+  (when coq--proof-tree-must-disable-evars
+    (when (> (car proof-info) proof-tree-last-state)
+      (coq-proof-tree-insert-evar-command "Unset"))
+    (setq coq--proof-tree-must-disable-evars nil)))
+
+(defun coq-proof-tree-evar-display-toggle ()
+  "Urgent action hook function for changing the evar printing status in Coq.
+This function is for `proof-tree-urgent-action-hook' (which is
+called only if external proof disaply is switched on). It checks
+whether a proof was started or stopped and inserts commands for
+enableing and disabling the evar status line for Coq 8.6 or
+later. Without the evar status line being enabled, prooftree
+crashes.
+
+Must only be called via `proof-tree-urgent-action-hook' to ensure
+that the dynamic variable `proof-info' is bound to the current
+result of `coq-proof-tree-get-proof-info'."
+  (let ((current-proof-name (cadr proof-info)))
+    (cond
+     ((and (null proof-tree-current-proof) current-proof-name)
+      ;; started a new proof
+      (coq-proof-tree-enable-evars))
+     ((and proof-tree-current-proof (null current-proof-name))
+      ;; finished the current proof
+      (coq-proof-tree-disable-evars)))))
+
+(add-hook 'proof-tree-urgent-action-hook 'coq-proof-tree-evar-display-toggle)
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -2068,7 +2574,8 @@ mouse activation."
 
 (defun coq--format-intros (output)
   "Create an “intros” form from the OUTPUT of “Show Intros”."
-  (let* ((shints (replace-regexp-in-string "[\r\n ]*\\'" "" output)))
+  (let* ((shints1 (replace-regexp-in-string "^[0-9] subgoal\\(.\\|\n\\|\r\\)*"  "" output))
+         (shints (replace-regexp-in-string "[\r\n ]*\\'" "" shints1)))
     (if (or (string= "" shints)
             (string-match coq-error-regexp shints))
         (error "Don't know what to intro")
@@ -2234,6 +2741,21 @@ Completion is on a quasi-exhaustive list of Coq tacticals."
          "Set Printing All" q "Unset Printing All" nil "Test Printing All")
       (proof-shell-invisible-command q))))
 
+
+;; TODO SearchAbout become Search in v8.5, change when V8.4 becomes old.
+(defun coq-SearchAbout ()
+  (interactive)
+  (coq-ask-do
+   ;; TODO: use [Add Search Blacklist "foo"] to exclude optionaly some patterns:
+   ;;  "_ind" "_rec" "R_" "_equation"
+   "SearchAbout (ex: \"eq_\" eq -bool)"
+   "SearchAbout"
+   nil nil t)
+  (when coq-highlight-hyps-cited-in-response
+    (coq-highlight-hyps-cited-in-response)
+    (message "M-x coq-unhighlight-selected-hyps to remove highlighting, [Coq/Settings/Search Blacklist] to change blacklisting."))
+  (unless coq-highlight-hyps-cited-in-response
+    (message "[Coq/Settings/Search Blacklist] to change blacklisting.")))
 
 ;; Insertion commands
 (define-key coq-keymap [(control ?i)] 'coq-insert-intros)
@@ -2524,6 +3046,13 @@ number of hypothesis displayed, without hiding the goal"
                                     proof-shell-last-output)
                 (proof-clean-buffer proof-goals-buffer))))
 
+(add-hook 'proof-shell-handle-delayed-output-hook
+	  (lambda () (setq coq-hyps-positions (coq-detect-hyps proof-goals-buffer))
+            (coq-init-hypname-overlays coq-hyps-positions)
+            (coq-highlight-selected-hyps)
+            (coq-hide-hyps)))
+
+
 
 (defun is-not-split-vertic (selected-window)
   (<= (- (frame-height) (window-height)) 2))
@@ -2547,27 +3076,28 @@ Only when three-buffer-mode is enabled."
   ;; https://github.com/cpitclaudel/company-coq/issues/8.
   (unless (memq 'no-response-display proof-shell-delayed-output-flags)
     ;; If there is no frame with goql+response then do nothing
-    (when (and proof-three-window-enable (coq-find-threeb-frames))
-      (let ((pg-frame (car (coq-find-threeb-frames)))) ; selecting one adequat frame
-        (with-selected-frame pg-frame
-          (when (and (> (frame-height) 10)
-                     (get-buffer-window proof-response-buffer))
-            (let ((maxhgth
-                   (- (+ (with-selected-window (get-buffer-window proof-goals-buffer t) (window-text-height))
-                         (with-selected-window (get-buffer-window proof-response-buffer t) (window-text-height)))
-                      window-min-height))
-                  hgt-resp nline-resp)
-              (with-selected-window (get-buffer-window proof-response-buffer)
-                (setq hgt-resp (window-text-height))
-                (with-current-buffer proof-response-buffer
-                  (setq nline-resp ; number of lines we want for response buffer
-                        (min maxhgth (max window-min-height ; + 1 for comfort
-                                          (+ 1 (count-lines (point-max) (point-min)))))))
-                (unless (is-not-split-vertic (selected-window))
-                  (shrink-window (- hgt-resp nline-resp)))
-                (with-current-buffer proof-response-buffer
-                  (goto-char (point-min))
-                  (recenter))))))))))
+    (when proof-three-window-enable 
+      (let ((threeb-frames (coq-find-threeb-frames)))
+        (when threeb-frames
+          (let ((pg-frame (car threeb-frames))) ; selecting one adequate frame
+            (with-selected-frame pg-frame
+              (let ((response-window (get-buffer-window proof-response-buffer t))
+                    (goals-window (get-buffer-window proof-goals-buffer t)))
+                (when (and response-window
+                           (> (frame-height) 10))
+                  (with-selected-window response-window
+                    (with-current-buffer proof-response-buffer
+                      (let* ((response-height (window-text-height response-window))
+                             (goals-height (window-text-height goals-window))
+                             (maxhgth (- (+ response-height goals-height)
+                                         window-min-height))
+                             (nline-resp ; number of lines we want for response buffer
+                              (min maxhgth (max window-min-height ; + 1 for comfort
+                                                (+ 1 (count-lines (point-max) (point-min)))))))
+                        (unless (is-not-split-vertic (selected-window))
+                          (shrink-window (- response-height nline-resp)))
+                        (goto-char (point-min))
+                        (recenter)))))))))))))
 
 ;; TODO: remove/add hook instead? 
 (defun coq-optimise-resp-windows-if-option ()
@@ -2701,13 +3231,6 @@ are non-nil at the same time, this gives priority to the former."
 ;(define-key proof-mode-map (kbd coq-double-hit-hot-key) 'coq-terminator-insert)
 (define-key coq-mode-map (kbd ".") 'coq-terminator-insert)
 ;(define-key coq-mode-map (kbd ";") 'coq-terminator-insert) ; for french keyboards
-
-;; Activation of ML4PG functionality
-(declare-function ml4pg-select-mode "ml4pg") ;; Avoids copilation warnings
-
-(defun coq-activate-ml4pg ()
-  (let ((filename (concatenate 'string proof-home-directory "contrib/ML4PG/ml4pg.el")))
-    (when (file-exists-p filename) (load-file filename) (ml4pg-select-mode))))
 
 ;;;;;;;;;;;;;;
 

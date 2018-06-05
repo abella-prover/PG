@@ -1,11 +1,18 @@
-;; proof-site.el -- Loading stubs for Proof General.
-;;
-;; Copyright (C) 1998-2003 LFCS Edinburgh.
+;;; proof-site.el --- Loading stubs for Proof General.
+
+;; This file is part of Proof General.
+
+;; Portions © Copyright 1994-2012  David Aspinall and University of Edinburgh
+;; Portions © Copyright 2003, 2012, 2014  Free Software Foundation, Inc.
+;; Portions © Copyright 2001-2017  Pierre Courtieu
+;; Portions © Copyright 2010, 2016  Erik Martin-Dorel
+;; Portions © Copyright 2011-2013, 2016-2017  Hendrik Tews
+;; Portions © Copyright 2015-2017  Clément Pit-Claudel
+
 ;; Author:      David Aspinall <David.Aspinall@ed.ac.uk>
+
 ;; License:     GPL (GNU GENERAL PUBLIC LICENSE)
-;;
-;; $Id$
-;;
+
 ;;; Commentary:
 ;; 
 ;; Loading stubs and configuration for site and choice of provers.
@@ -39,12 +46,13 @@
 
       (isar "Isabelle" "thy")
       (coq "Coq" "v" nil (".vo" ".glob"))
-      (phox "PhoX" "phx")
+      (easycrypt "EasyCrypt" "ec" "\\.eca?\\'")
 
       (abella "Abella" "thm")
 
       ;; Obscure instances or conflict with other Emacs modes.
 
+      ;; (phox "PhoX" "phx")
       ;; (lego "LEGO" "l")
       ;; (ccc    "CASL Consistency Checker" "ccc")
 
@@ -74,7 +82,7 @@
 
 (eval-and-compile
   ;; WARNING: do not edit next line (constant is edited in Makefile.devel)
-  (defconst proof-general-version "Proof General Version 4.4pre."
+  (defconst proof-general-version "Proof General Version 4.4.1~pre."
     "Version string identifying Proof General release."))
 
 (defconst proof-general-short-version
@@ -164,7 +172,7 @@ You can use customize to set this variable."
 (require 'proof-autoloads)
 
 (eval-when-compile
-  (defvar Info-dir-contents nil))
+  (defvar Info-dir-contents))
 
 ;; Add the info directory to the Info path
 (if (file-exists-p proof-info-directory) ; for safety

@@ -1,22 +1,30 @@
-;; coq-syntax.el Font lock expressions for Coq
-;; Copyright (C) 1997-2007, 2009 LFCS Edinburgh.
+;;; coq-syntax.el --- Font lock expressions for Coq
+
+;; This file is part of Proof General.
+
+;; Portions © Copyright 1994-2012  David Aspinall and University of Edinburgh
+;; Portions © Copyright 2003, 2012, 2014  Free Software Foundation, Inc.
+;; Portions © Copyright 2001-2017  Pierre Courtieu
+;; Portions © Copyright 2010, 2016  Erik Martin-Dorel
+;; Portions © Copyright 2011-2013, 2016-2017  Hendrik Tews
+;; Portions © Copyright 2015-2017  Clément Pit-Claudel
+
 ;; Authors: Thomas Kleymann, Healfdene Goguen, Pierre Courtieu
-;; License:     GPL (GNU GENERAL PUBLIC LICENSE)
 ;; Maintainer: Pierre Courtieu <Pierre.Courtieu@cnam.fr>
 
-;; coq-syntax.el,v 11.13 2013/07/10 14:59:08 pier Exp
+;; License:     GPL (GNU GENERAL PUBLIC LICENSE)
+
+;;; Commentary:
+;;
+
+;;; Code:
 
 (require 'proof-syntax)
 (require 'proof-utils)                  ; proof-locate-executable
 (require 'coq-db)
+(require 'span)
 
-(eval-when-compile
-  (require 'span)
-  (defvar coq-goal-command-regexp nil)
-  (defvar coq-save-command-regexp-strict nil))
-
-
- ;;; keyword databases
+;;; keyword databases
 
 (defcustom coq-user-tactics-db nil
   "User defined tactic information.  See `coq-syntax-db' for
@@ -411,7 +419,9 @@ so for the following reasons:
 (defvar coq-decl-db
   '(
     ("Local Axiom" nil "Local Axiom # : #" t "Local\\s-+Axiom")
+    ("Local Axioms" nil "Local Axioms # , #: #" t "Local\\s-+Axioms")
     ("Axiom" "ax" "Axiom # : #" t "Axiom")
+    ("Axioms" "axs" "Axioms # , #: #" t "Axioms")
     ("Global Variable" "gv" "Global Variable #: #." t "Global\\s-+Variable")
     ("Global Variables" "gvs" "Global Variables # , #: #." t "Global\\s-+Variables")
     ("Hint Constructors" "hc" "Hint Constructors # : #." t "Hint\\s-+Constructors")
@@ -427,10 +437,11 @@ so for the following reasons:
     ("Hypothesis" "hyp" "Hypothesis #: #" t "Hypothesis")
     ("Hypotheses" "hyp" "Hypotheses #: #" t "Hypotheses")
     ("Parameter" "par" "Parameter #: #" t "Parameter")
-    ("Parameters" "par" "Parameter #: #" t "Parameters")
+    ("Parameters" "par" "Parameters #: #" t "Parameters")
     ("Conjecture" "conj" "Conjecture #: #." t "Conjecture")
     ("Variable" "v" "Variable #: #." t "Variable")
     ("Variables" "vs" "Variables # , #: #." t "Variables")
+    ("Context" nil "Context #, (# : #)." t "Context")
     ("Local Coercion" nil "Local Coercion @{id} : @{typ1} >-> @{typ2}." t "Local\\s-+Coercion")
     ("Coercion" "coerc" "Coercion @{id} : @{typ1} >-> @{typ2}." t "Coercion")
     )
@@ -518,7 +529,7 @@ so for the following reasons:
     ("Instance goal" "instg" "Instance #:#.\n#\nDefined." t);; careful
     ("Lemma" "l" "Lemma # : #.\nProof.\n#\nQed." t "Lemma")
     ("Program Lemma" "pl" "Program Lemma # : #.\nProof.\n#\nQed." t "Program\\s-+Lemma")
-    ("Proposition" "l" "Proposition # : #.\nProof.\n#\nQed." t "Proposition")
+    ("Proposition" "pr" "Proposition # : #.\nProof.\n#\nQed." t "Proposition")
     ("Module! (interactive)" nil "Module # : #.\n#\nEnd #." nil nil coq-insert-section-or-module)
     ("Module Type" "mti" "Module Type #.\n#\nEnd #." t "Module\\s-+Type") ; careful
     ("Module :" "moi" "Module # : #.\n#\nEnd #." t "Module") ; careful
@@ -703,22 +714,26 @@ so for the following reasons:
     ("Set Nonrecursive Elimination Schemes" nil "Set Nonrecursive Elimination Schemes" t "Set Nonrecursive\\s-+Elimination\\s-+Schemes")
     ("Set Parsing Explicit" nil "Set Parsing Explicit" t "Set Parsing\\s-+Explicit")
     ("Set Primitive Projections" nil "Set Primitive Projections" t "Set Primitive\\s-+Projections")
-    ("Set Printing All" nil "Set Printing All" t "Set Printing\\s-+All")
-    ("Set Printing Coercions" nil "Set Printing Coercions" t "Set Printing\\s-+Coercions")
-    ("Set Printing Depth" nil "Set Printing Depth" t "Set Printing\\s-+Depth")
-    ("Set Printing Existential Instances" nil "Set Printing Existential Instances" t "Set Printing\\s-+Existential\\s-+Instances")
-    ("Set Printing Implicit" nil "Set Printing Implicit" t "Set Printing\\s-+Implicit")
-    ("Set Printing Implicit Defensive" nil "Set Printing Implicit Defensive" t "Set Printing\\s-+Implicit\\s-+Defensive")
-    ("Set Printing Matching" nil "Set Printing Matching" t "Set Printing\\s-+Matching")
-    ("Set Printing Notations" nil "Set Printing Notations" t "Set Printing\\s-+Notations")
-    ("Set Printing Primitive Projection Compatibility" nil "Set Printing Primitive Projection Compatibility" t "Set Printing\\s-+Primitive\\s-+Projection\\s-+Compatibility")
-    ("Set Printing Primitive Projection Parameters" nil "Set Printing Primitive Projection Parameters" t "Set Printing\\s-+Primitive\\s-+Projection\\s-+Parameters")
-    ("Set Printing Projections" nil "Set Printing Projections" t "Set Printing\\s-+Projections")
-    ("Set Printing Records" nil "Set Printing Records" t "Set Printing\\s-+Records")
-    ("Set Printing Synth" nil "Set Printing Synth" t "Set Printing\\s-+Synth")
-    ("Set Printing Universes" nil "Set Printing Universes" t "Set Printing\\s-+Universes")
-    ("Set Printing Width" nil "Set Printing Width" t "Set Printing\\s-+Width")
-    ("Set Printing Wildcard" nil "Set Printing Wildcard" t "Set Printing\\s-+Wildcard")
+    ("Set Printing All" nil "Set Printing All" t "Set\\s-+Printing\\s-+All")
+    ("Set Printing Coercions" nil "Set Printing Coercions" t "Set\\s-+Printing\\s-+Coercions")
+    ("Set Printing Compact Contexts" nil "Set Printing Compact Contexts" t "Set\\s-+Printing\\s-+Compact\\s-+Contexts")
+    ("Set Printing Depth" nil "Set Printing Depth" t "Set\\s-+Printing\\s-+Depth")
+    ("Set Printing Existential Instances" nil "Set Printing Existential Instances" t "Set\\s-+Printing\\s-+Existential\\s-+Instances")
+    ("Set Printing Goal Tags" nil "Set Printing Goal Tags" t "Set\\s-+Printing\\s-+Goal\\s-+Tags")
+    ("Set Printing Goal Names" nil "Set Printing Goal Names" t "Set\\s-+Printing\\s-+Goal\\s-+Names")
+    ("Set Printing Implicit" nil "Set Printing Implicit" t "Set\\s-+Printing\\s-+Implicit")
+    ("Set Printing Implicit Defensive" nil "Set Printing Implicit Defensive" t "Set\\s-+Printing\\s-+Implicit\\s-+Defensive")
+    ("Set Printing Matching" nil "Set Printing Matching" t "Set\\s-+Printing\\s-+Matching")
+    ("Set Printing Notations" nil "Set Printing Notations" t "Set\\s-+Printing\\s-+Notations")
+    ("Set Printing Primitive Projection Compatibility" nil "Set Printing Primitive Projection Compatibility" t "Set\\s-+Printing\\s-+Primitive\\s-+Projection\\s-+Compatibility")
+    ("Set Printing Primitive Projection Parameters" nil "Set Printing Primitive Projection Parameters" t "Set\\s-+Printing\\s-+Primitive\\s-+Projection\\s-+Parameters")
+    ("Set Printing Projections" nil "Set Printing Projections" t "Set\\s-+Printing\\s-+Projections")
+    ("Set Printing Records" nil "Set Printing Records" t "Set\\s-+Printing\\s-+Records")
+    ("Set Printing Synth" nil "Set Printing Synth" t "Set\\s-+Printing\\s-+Synth")
+    ("Set Printing Unfocused" nil "Set Printing Unfocused" t "Set\\s-+Printing\\s-+Unfocused")
+    ("Set Printing Universes" nil "Set Printing Universes" t "Set\\s-+Printing\\s-+Universes")
+    ("Set Printing Width" nil "Set Printing Width" t "Set\\s-+Printing\\s-+Width")
+    ("Set Printing Wildcard" nil "Set Printing Wildcard" t "Set\\s-+Printing\\s-+Wildcard")
     ("Set Program Mode" nil "Set Program Mode" t "Set Program\\s-+Mode")
     ("Set Proof Using Clear Unused" nil "Set Proof Using Clear Unused" t "Set Proof\\s-+Using\\s-+Clear\\s-+Unused")
     ("Set Record Elimination Schemes" nil "Set Record Elimination Schemes" t "Set Record\\s-+Elimination\\s-+Schemes")
@@ -759,11 +774,11 @@ so for the following reasons:
     ("Set Silent" nil "Set Silent" t "Set Silent")
     ("Set Undo" nil "Set Undo" t "Set Undo")
     ("Set Search Blacklist" nil "Set Search Blacklist" t "Set Search\\s-+Blacklist")
-    ("Set Printing Coercion" nil "Set Printing Coercion" t "Set Printing\\s-+Coercion")
-    ("Set Printing If" nil "Set Printing If" t "Set Printing\\s-+If")
-    ("Set Printing Let" nil "Set Printing Let" t "Set Printing\\s-+Let")
-    ("Set Printing Record" nil "Set Printing Record" t "Set Printing\\s-+Record")
-    ("Set Printing Constructor" nil "Set Printing Constructor" t "Set Printing\\s-+Constructor")
+    ("Set Printing Coercion" nil "Set Printing Coercion" t "Set\\s-+Printing\\s-+Coercion")
+    ("Set Printing If" nil "Set Printing If" t "Set\\s-+Printing\\s-+If")
+    ("Set Printing Let" nil "Set Printing Let" t "Set\\s-+Printing\\s-+Let")
+    ("Set Printing Record" nil "Set Printing Record" t "Set\\s-+Printing\\s-+Record")
+    ("Set Printing Constructor" nil "Set Printing Constructor" t "Set\\s-+Printing\\s-+Constructor")
     ("Solve Obligations" "oblssolve" "Solve Obligations using #." t "Solve\\s-+Obligations")
     ("Local Strategy" nil "Local Strategy # [#]." t "Local\\s-+Strategy")
     ("Strategy" nil "Strategy # [#]." t "Strategy")
@@ -1200,11 +1215,17 @@ It is used:
 (defvar coq-symbols-regexp (regexp-opt coq-symbols))
 
 ;; ----- regular expressions
-(defvar coq-error-regexp "^\\(Error:\\|Discarding pattern\\|Syntax error:\\|System Error:\\|User Error:\\|User error:\\|Anomaly[:.]\\|Toplevel input[,]\\)"
+(defvar coq-error-regexp "^\\(In nested Ltac call\\|Error:\\|Discarding pattern\\|Syntax error:\\|System Error:\\|User Error:\\|User error:\\|Anomaly[:.]\\|Toplevel input[,]\\)"
   "A regexp indicating that the Coq process has identified an error.")
 
+;; april2017: coq-8.7 removes special chars definitely and puts
+;; <infomsg> and <warning> around all messages except errors.
+;; We let our legacy regexp for some years and remove them, say, in 2020.
 (defvar coq-shell-eager-annotation-start
-   "\376\\|\\[Reinterning\\|Warning:\\|TcDebug \\|<infomsg>")
+   "\376\\|\\[Reinterning\\|Warning:\\|TcDebug \\|<infomsg>\\|<warning>")
+
+(defvar coq-shell-eager-annotation-end
+  "\377\\|done\\]\\|</infomsg>\\|</warning>\\|\\*\\*\\*\\*\\*\\*\\|) >")
 
 (defvar coq-id "\\(@\\|_\\|\\w\\)\\(\\w\\|\\s_\\)*") ;; Coq ca start an id with @ or _
 (defvar coq-id-shy "\\(?:@\\|_\\|\\w\\)\\(?:\\w\\|\\s_\\)*")
@@ -1304,10 +1325,6 @@ It is used:
 ;;  (concat "\\(with\\)\\s-+\\(" coq-id "\\)\\s-*\\([^(.]*:\\|.*)[^(.]*:=\\)"))
 ;;"\\<Prop\\>\\|\\<Set\\>\\|\\<Type\\>"
 
-;; (defconst coq-require-command-regexp
-;;   (concat "Require\\s-+\\(" coq-id "\\)")
-;;   "Regular expression matching Require commands in Coq.
-;; Group number 1 matches the name of the library which is required.")
 
 (defconst coq-context-marker-regexp
   (concat (regexp-opt '("ltac" "constr" "uconstr") 'symbols) ":"))
@@ -1341,8 +1358,42 @@ It is used:
 ;; 1 space this is a hypothesis displayed in the middle of a line (> v8.5)
 ;; "^    " is for goals in debug mode.
 (defvar coq-hyp-name-in-goal-or-response-regexp
-    "\\(^\\|^  \\|^    \\|[^^ ] ?  \\)\\(\\(?:[^\n :(),=]\\|, \\)+ *\\(?::[ \n]\\|,$\\)\\)"
-  "regexp matching hypothesis names in goal or response buffer")
+    "\\(?:\\(?1:\n\\)\\|\\(?1:\n  \\)\\|\\(?1:\n    \\)\\|\\(?:[^ ]\\)\\(?1:   \\)\\)\\(?2:\\(?:[^\n :(),=]\\|, \\)+\\) *\\(?::=?[ \n]\\|,$\\)"
+  "regexp matching hypothesis names in goal or response buffer.
+Subexpr 2 contains the real name of the function.
+Subexpr 1 contains the prefix context (spaces mainly) that is not
+part of another hypothesis.")
+
+; Matches the end of the last hyp, before the ======... separator.
+(defvar coq-hyp-name-or-goalsep-in-goal-or-response-regexp
+  (concat coq-hyp-name-in-goal-or-response-regexp "\\|\\(?1:\n\\s-+========\\)")
+  )
+
+(defun coq-detect-hyps (buf)
+  "Detect all hypothesis displayed in buffer BUF and returns a list of descriptors.
+Descriptors are of the form (hypname start end endofhypname)
+where end is the end of the hypothesis type."
+  (with-current-buffer buf
+    (save-excursion
+      (goto-char (point-min))
+      (let ((res '()))
+        (while (search-forward-regexp coq-hyp-name-in-goal-or-response-regexp nil t)
+          (let* ((str (match-string 2))
+                 (beg (match-beginning 2))
+                 (endhypname (match-end 2))
+                 (splitstr (split-string str ",\\|,$\\|:" t "\\s-"))
+                 (end (save-excursion ; looking for next hyp and return its leftest part
+                        (search-forward-regexp coq-hyp-name-or-goalsep-in-goal-or-response-regexp nil t)
+                        (match-beginning 1))))
+            (mapc
+             (lambda (s)
+               (setq res
+                     (cons 
+                      (cons (substring-no-properties s)
+                            (cons beg (cons end (cons endhypname nil))))
+                      res)))
+             splitstr)))
+        res))))
 
 ;; We define a slightly different set of keywords for response buffer.
 

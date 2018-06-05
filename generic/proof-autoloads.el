@@ -1,5 +1,17 @@
 ;;; proof-autoloads.el --- automatically extracted autoloads
+
+;; This file is part of Proof General.
+
+;; Portions © Copyright 1994-2012  David Aspinall and University of Edinburgh
+;; Portions © Copyright 2003, 2012, 2014  Free Software Foundation, Inc.
+;; Portions © Copyright 2001-2017  Pierre Courtieu
+;; Portions © Copyright 2010, 2016  Erik Martin-Dorel
+;; Portions © Copyright 2011-2013, 2016-2017  Hendrik Tews
+;; Portions © Copyright 2015-2017  Clément Pit-Claudel
+
+;;; Commentary:
 ;;
+
 ;;; Code:
 
 (if (featurep 'proof-autoloads) (error "Already loaded"))
@@ -7,7 +19,7 @@
 (eval-when-compile
   (require 'cl))
 
-(eval-when (compile)
+(eval-when-compile
   (require 'pg-vars)
   (require 'proof-config)
   (require 'scomint))
@@ -600,26 +612,6 @@ Not documented
 Construct and return PG auxiliary menu used in non-scripting buffers.
 
 \(fn)" nil nil)
-
-;;;***
-
-;;;### (autoloads (proof-mmm-enable proof-mmm-set-global) "proof-mmm"
-;;;;;;  "proof-mmm.el" (20118 50210))
-;;; Generated autoloads from proof-mmm.el
-
-(autoload 'proof-mmm-set-global "proof-mmm" "\
-Set global status of MMM mode for PG buffers to be FLAG.
-
-\(fn FLAG)" nil nil)
-
-(autoload 'proof-mmm-enable "proof-mmm" "\
-Turn on or off MMM mode in Proof General script buffer.
-This invokes `mmm-mode' to toggle the setting for the current
-buffer, and then sets PG's option for default to match.
-Also we arrange to have MMM mode turn itself on automatically
-in future if we have just activated it for this buffer.
-
-\(fn)" t nil)
 
 ;;;***
 

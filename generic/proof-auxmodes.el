@@ -1,7 +1,16 @@
 ;;; proof-auxmodes.el --- Arrange for auxiliary modes to be loaded when required
-;;
-;; Copyright (C) 2008, 2010 David Aspinall / LFCS Edinburgh
+
+;; This file is part of Proof General.
+
+;; Portions © Copyright 1994-2012  David Aspinall and University of Edinburgh
+;; Portions © Copyright 2003, 2012, 2014  Free Software Foundation, Inc.
+;; Portions © Copyright 2001-2017  Pierre Courtieu
+;; Portions © Copyright 2010, 2016  Erik Martin-Dorel
+;; Portions © Copyright 2011-2013, 2016-2017  Hendrik Tews
+;; Portions © Copyright 2015-2017  Clément Pit-Claudel
+
 ;; Author:    David Aspinall <David.Aspinall@ed.ac.uk>
+
 ;; License:   GPL (GNU GENERAL PUBLIC LICENSE)
 
 ;;; Commentary:
@@ -10,31 +19,9 @@
 ;; loading of their main defining files and the possibility to disable them.
 ;;
 
-(require 'proof-utils)			; proof-ass, proof-eval...
-
 ;;; Code:
 
-;;
-;; MMM
-;;
-(defun proof-mmm-support-available ()
-  "A test to see whether mmm support is available."
-  (and
-   (or (featurep 'mmm-auto)
-       (progn
-	 ;; put bundled version on load path
-	 (proof-add-to-load-path 
-		(concat proof-home-directory "contrib/mmm/"))
-	 ;; *should* always succeed unless bundled version broken
-	 (proof-try-require 'mmm-auto)))
-   ;; Load prover-specific config in <foo>-mmm.el
-   (proof-try-require (proof-ass-sym mmm))))
-
-(proof-eval-when-ready-for-assistant
-    (if (and (proof-ass mmm-enable)
-	     (proof-mmm-support-available))
-	(proof-mmm-set-global t)))
-
+(require 'proof-utils)			; proof-ass, proof-eval...
 
 ;;
 ;; Maths menu

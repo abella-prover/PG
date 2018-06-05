@@ -1,16 +1,168 @@
 -*- outline -*-  
 
 This is a summary of main changes.  For details, please see
-the GIT ChangeLog and PG Trac, http://proofgeneral.inf.ed.ac.uk/trac.
+the Git ChangeLog, the GitHub repo https://github.com/ProofGeneral/PG
+and the PG Trac http://proofgeneral.inf.ed.ac.uk/trac
 
-* Changes of Proof General 4.3 from Proof General 4.2
+* Changes of Proof General 4.4.1 from Proof General 4.4
 
-** ProofGeneral has moved to github!
+** Generic changes
 
-   https://github.com/ProofGeneral/PG.
+*** bug fixes
+    - Using query-replace (or replace-string) in the processed region
+      doesn't wrongly jump to the first match anymore.
+    - cheat face (admit etc) now visible when locked.
+
+*** remove key-binding for proof-electric-terminator-toggle
+    - The default key-binding for proof-electric-terminator-toggle
+      (C-c .) was too easy to enter by mistake. And it was not that
+      useful as we can expect users to configure electric-terminator
+      once and for all. Hence the removal of this default key-binding.
+
+*** add another (fallback) key-binding for proof-goto-point
+    - The default key-binding for proof-goto-point (C-c <C-return>)
+      was not available in TTYs. Now, this function can also be run
+      with "C-c RET", which happens to be automatically trigerred if
+      we type "C-c <C-return>" in a TTY.
+
+** Coq changes
+
+*** new menu Coq -> Auto Compilation for all background compilation options
+
+*** support for 8.5 quick compilation
+
+    See new menu Coq -> Auto Compilation. Select "no quick" as
+    long as you have not switched to "Proof using" to compile
+    without -quick. Select "quick no vio2vo" to use -quick
+    without vio2vo (and guess what "quick and vio2vo" means ;-),
+    select "ensure vo" to ensure a sound development. See the
+    option `coq-compile-quick' or the subsection "11.3.3 Quick
+    compilation and .vio Files" in the Coq reference manual.
+
+*** new option coq-compile-keep-going (in menu Coq -> Auto Compilation)
+
+    Similar to ``make -k'', with this option enabled, background
+    compilation does not stop at the first error but rather
+    continues as far as possible.
+
+*** Limited extensibility for indentation 
+
+    Coq indentation mechanism is based on a fixed set of tokens and
+    precedence rules. Extensibility is now possible by adding new
+    syntax for a given token (no new token can be added). 
+
+    Typical example: if you define a infix operator xor you may
+    want to define it as a new syntax for token \/ in order to
+    have the indentation rules of or applied to xor.
+
+    Use:
+    (setq coq-smie-user-tokens '(("xor" . "\\/")))
+    
+    The set of tokens can be seen in variable smie-grammar.
+
+*** Clickable Hypothesis in goals buffer
+
+    button 3 on a hyp name hides/unhides it (fold/unfold). 
+    button 2 on a hyp name copies its name at current cursor position.
+
+    hide/unhide status remains when goal changes.
+
+    You can define keyboard shortcuts for these:
+
+    M-x coq-toggle-hide-hyp (asks for a hyp name)
+    M-x coq-toggle-hide-hyp-at-point (toggles hiding hyp at point)
+    M-x coq-unhide-hyps (unhides everything)
+
+    By default hypothesis names are highlighted when hovered with the
+    mouse, and a small help also pops up. you can disable it with on
+    of these:
+    
+     (setq coq-hypname-visible-hovering 'only-help) 
+     (setq coq-hypname-visible-hovering 'only-highlight) 
+     (setq coq-hypname-visible-hovering nil) ;; nothing
+     (setq coq-hypname-visible-hovering t) ;; both, default
+
+*** Highlighting of hypothesis
+
+    you can highlight hypothesis on a per name fashion. 
+
+    Highlighting status remains when goal changes.
+
+    M-x coq-highlight (toggles highlighting on hyp at point)
+    M-x coq-unhighlight-selected-hyps (removes all highlightings)
+
+**** Automtic highlighting with (search)About.
+    Hypothesis cited in the response buffer after C-c C-a C-a (i.e.
+    M-x coq-SearchAbout) will be highlighted automatically. Any other
+    hypothesis highlighted is unhighlighted.
+    
+    To disable this, do:
+
+    (setq coq-highlight-hyps-cited-in-response nil)
+
+*** bug fixes
+    - avoid leaving partial files behind when compilation fails
+    - 123: Parallel background compliation fails to execute some
+      imports
+    - fix error in process filter: Cannot resize window
+    - 54 partially: Buffer coq-compile-response sometimes takes
+      over the whole window
+    - 75: Library more.v is required
+    - 70: Coq trunk + compile before require => « Invalid version
+      syntax: 'trunk' »
+    - 92: Compile before require from current directory failing
+      with 8.5
+
+* Changes of Proof General 4.4 from Proof General 4.3
+
+** ProofGeneral has moved to GitHub!
+
+   https://github.com/ProofGeneral/PG
 
    Please submit new bugs there, old bugs may stay in good old PG trac
-   for a while though: http://proofgeneral.inf.ed.ac.uk/trac.
+   for a while though: http://proofgeneral.inf.ed.ac.uk/trac
+
+** Coq changes
+
+*** indentation of ";" tactical:
+    by default the indentation is like this:
+    tac1;
+      tac2;
+      tac3.
+    do this: (setq coq-indent-semicolon-tactical 0) to have this:
+    tac1;
+    tac2;
+    tac3.
+
+*** Option to disable the auto resizing of response buffer:
+
+    By default when the response buffer is on the same column than
+    goals buffer, pg changes its size dynamically to optimize goals
+    displaying.
+
+    To disable this feature use:
+    (setq coq-optimise-resp-windows-enable nil)
+    
+*** Option to prefer top of conclusion instead of bottom
+
+    When display goals that do not fit in the goals window, PG prefers
+    to display the bottom of the goal (where lies it own conclusion.
+    You can make it prefer the top of the conclusion by setting this:
+    (setq coq-prefer-top-of-conclusion t)
+
+*** Auto adjusting of printing width
+
+    On by default. To disable: Coq/Settings/Auto Adapt Printing Width
+    or (setq coq-auto-adapt-printing-width nil).
+
+*** Removed the Set Undo 500 at start.
+    This is obsolete. To recover: (setq coq-user-init-cmd `("Set Undo 500."))
+
+*** Option to highlight usual symbols
+    Off by default, enable using:
+    (setq coq-symbol-highlight-enable t)
+
+* Changes of Proof General 4.3 from Proof General 4.2
 
 ** Prooftree changes
 
@@ -65,15 +217,13 @@ the GIT ChangeLog and PG Trac, http://proofgeneral.inf.ed.ac.uk/trac.
       | S n => ...
     end    
 
-*** indentation of ";" tactical:
-    by default the indentation is like this:
-    tac1;
-      tac2;
-      tac3.
-    do this: (setq coq-indent-semicolon-tactical 0) to have this:
-    tac1;
-    tac2;
-    tac3.
+*** indentation now supports { at end of line:
+    example:
+
+    assert (h:n = k). {
+      apply foo.
+      reflexivity. }
+    apply h.
 
 *** Default indentation of forall and exists is not boxed anymore
     For instance, this is now indented like this:
@@ -90,6 +240,20 @@ the GIT ChangeLog and PG Trac, http://proofgeneral.inf.ed.ac.uk/trac.
     Use (setq coq-smie-after-bolp-indentation 0) for a smaller indentation:
        Lemma foo: forall x y,
          x = 0 -> ... .
+
+*** Default indentation cases of "match with" are now indented by 2 instead of 4.
+     "|" is indented by zero:
+
+        match n with                   
+          0 => ...	     
+        | S n => ...                   
+        end                            
+     instead of: 
+        match n with  
+            0 => ...       
+          | S n => ...
+        end
+     do this: (setq coq-match-indent 4) to bring old behaviour back.
 
 *** Support for bullets, braces and Grab Existential Variables for Prooftree.
 
@@ -111,40 +275,12 @@ the GIT ChangeLog and PG Trac, http://proofgeneral.inf.ed.ac.uk/trac.
 
 *** Support for prettify-symbols-mode.
 
-*** Option to disable the auto resizing of response buffer:
-
-    By default when the response buffer is on the same column than
-    goals buffer, pg changes its size dynamically to optimize goals
-    displaying.
-
-    To disable this feature use:
-    (setq coq-optimise-resp-windows-enable nil)
-    
-*** Option to prefer top of conclusion instead of bottom
-
-    When display goals that do not fit in the goals window, PG prefers
-    to display the bottom of the goal (where lies it own conclusion.
-    You can make it prefer the top of the conclusion by setting this:
-    (setq coq-prefer-top-of-conclusion t)
-
 *** Colors in response and goals buffers
 
     Experimental: colorize hypothesis names and some parts of error
     and warning messages, and also evars. For readability.
 
-*** Auto adjusting of printing width
-
-    On by default. To disable: Coq/Settings/Auto Adapt Printing Width
-    or (setq coq-auto-adapt-printing-width nil).
-
 *** Coq Querying facilities
-
-*** Removed the Set Undo 500 at start.
-    This is obsolete. To recover: (setq coq-user-init-cmd `("Set Undo 500."))
-
-*** Option to highlight usual symbols
-    Off by default, enable using:
-    (setq coq-symbol-highlight-enable t)
 
 **** Minibuffer interactive queries
 

@@ -1,11 +1,18 @@
 ;;; pg-vars.el --- Proof General global variables
-;;
-;; Copyright (C) 2008, 2010 LFCS Edinburgh.
+
+;; This file is part of Proof General.
+
+;; Portions © Copyright 1994-2012  David Aspinall and University of Edinburgh
+;; Portions © Copyright 2003, 2012, 2014  Free Software Foundation, Inc.
+;; Portions © Copyright 2001-2017  Pierre Courtieu
+;; Portions © Copyright 2010, 2016  Erik Martin-Dorel
+;; Portions © Copyright 2011-2013, 2016-2017  Hendrik Tews
+;; Portions © Copyright 2015-2017  Clément Pit-Claudel
+
 ;; Author:      David Aspinall <David.Aspinall@ed.ac.uk> and others
+
 ;; License:     GPL (GNU GENERAL PUBLIC LICENSE)
-;;
-;; $Id$
-;;
+
 ;;; Commentary:
 ;;
 ;; Global variables used in several files.
@@ -209,7 +216,25 @@ and the function `proof-assistant-format'.  The TYPE item determines
 the form of the menu entry for the setting (this is an Emacs widget type)
 and the DESCR description string is used as a help tooltip in the settings menu.
 
-This list is extended by the `defpacustom' macro.")
+As TYPE's only the simple types boolean, integer, number and
+string are supported (see `proof-menu-entry-for-setting'). Other
+types will yield an error when constructing the proof assistant
+menu from this list.
+
+Customizations defined with `defpacustom' are automatically added
+to this list.")
+
+(defvar proof-assistant-additional-settings nil
+  "Additional proof assistant specific customizations (as list of symbols).
+This variable should hold those proof assistant specific
+customizations that are not included in
+`proof-assistant-settings' but which should be saved/restored
+with the save and reset settings menu entry in the proof
+assistant menu.
+
+Customization variables are missing in `proof-assistant-settings'
+when they have a type not supported by `defpacusom'.")
+
 
 (defvar pg-tracing-slow-mode nil
   "Non-nil for slow refresh mode for tracing output.")
@@ -247,7 +272,7 @@ Internal variable dynamically bound.")
   :group 'proof-general-internals)
 
 (defcustom proof-general-home-page
-  "http://proofgeneral.inf.ed.ac.uk"
+  "https://proofgeneral.github.io"
   "*Web address for Proof General."
   :type 'string
   :group 'proof-general-internals)

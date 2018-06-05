@@ -1,12 +1,19 @@
 ;;; proof-shell.el --- Proof General shell mode.
-;;
-;; Copyright (C) 1994-2011 LFCS Edinburgh.
+
+;; This file is part of Proof General.
+
+;; Portions © Copyright 1994-2012  David Aspinall and University of Edinburgh
+;; Portions © Copyright 2003, 2012, 2014  Free Software Foundation, Inc.
+;; Portions © Copyright 2001-2017  Pierre Courtieu
+;; Portions © Copyright 2010, 2016  Erik Martin-Dorel
+;; Portions © Copyright 2011-2013, 2016-2017  Hendrik Tews
+;; Portions © Copyright 2015-2017  Clément Pit-Claudel
+
 ;; Authors:   David Aspinall, Yves Bertot, Healfdene Goguen,
 ;;            Thomas Kleymann and Dilip Sequeira
+
 ;; License:   GPL (GNU GENERAL PUBLIC LICENSE)
-;;
-;; $Id$
-;;
+
 ;;; Commentary:
 ;;
 ;; Mode for buffer which interacts with proof assistant.
@@ -21,11 +28,20 @@
   (require 'span)
   (require 'proof-utils))
 
+;; declare a few functions and variables from proof-tree - if we
+;; require proof-tree the compiler complains about a recusive
+;; dependency.
+(declare-function proof-tree-urgent-action "proof-tree" (flags))
+(declare-function proof-tree-handle-delayed-output "proof-tree"
+		  (old-proof-marker cmd flags span))
+(eval-when-compile
+  ;; without the nil initialization the compiler still warns about this variable
+  (defvar proof-tree-external-display nil))
+
 (require 'scomint)
 (require 'pg-response)
 (require 'pg-goals)
 (require 'pg-user)			; proof-script, new-command-advance
-(require 'proof-tree)
 
 
 ;;
@@ -79,9 +95,11 @@ See the functions `proof-start-queue' and `proof-shell-exec-loop'.")
 
 (defsubst proof-shell-invoke-callback (listitem)
   "From `proof-action-list' LISTITEM, invoke the callback on the span."
-  (condition-case nil
+  (condition-case err
       (funcall (nth 2 listitem) (car listitem))
-    (error nil)))
+    (error
+     (message "error escaping proof-shell-invoke-callback: %s" err)
+     nil)))
 
 (defvar proof-second-action-list-active nil
   "Signals that some items are waiting outside of `proof-action-list'.
@@ -273,6 +291,13 @@ In this case `proof-shell-filter' must be called again after it finished.")
     (setq pg-response-special-display-regexp
 	  (proof-regexp-alt goals resp trace thms))))
 
+(defun proof-strip-whitespace-at-end (string)
+  "Return STRING stripped of all trailing whitespace."
+  (while (string-match "[\r\n\t ]+$" string)
+    (setq string (replace-match "" t t string)))
+  string)
+
+
 (defun proof-shell-start ()
   "Initialise a shell-like buffer for a proof assistant.
 Does nothing if proof assistant is already running.
@@ -293,8 +318,11 @@ process command."
 		(apply proof-guess-command-line (list name)))))
 
     (if proof-prog-name-ask
-	(setq proof-prog-name (read-shell-command "Run process: "
-						  proof-prog-name)))
+        ;; if this option is set, an absolute file name is better to show if possible
+	(let ((prog-name (locate-file proof-prog-name exec-path exec-suffixes 1)))
+          (setq proof-prog-name (proof-strip-whitespace-at-end
+                                 (read-shell-command "Run process: "
+                                                     prog-name)))))
     (let
 	((proc (downcase proof-assistant)))
 
@@ -451,7 +479,9 @@ shell buffer, called by `proof-shell-bail-out' if process exits."
 	 (proc     (get-buffer-process (current-buffer)))
 	 (bufname  (buffer-name)))
     (message "%s, cleaning up and exiting..." bufname)
-    (run-hooks 'proof-shell-signal-interrupt-hook)
+    (let (prover-was-busy)
+      ;; hook functions might set prover-was-busy
+      (run-hooks 'proof-shell-signal-interrupt-hook))
     
     (redisplay t)
     (when (and alive proc)
@@ -813,14 +843,22 @@ In the first case, PG will terminate the queue of commands at the first
 available point.  In the second case, you may need to press enter inside
 the prover command buffer (e.g., with Isabelle2009 press RET inside *isabelle*)."
   (interactive)
-  (unless (proof-shell-live-buffer)
+  (let ((prover-was-busy nil))
+    (unless (proof-shell-live-buffer)
       (error "Proof process not started!"))
-  (unless proof-shell-busy
-    (error "Proof process not active!"))
-  (setq proof-shell-interrupt-pending t)
-  (with-current-buffer proof-shell-buffer
-    (interrupt-process))
-  (run-hooks 'proof-shell-signal-interrupt-hook))
+    ;; Hook functions might set prover-was-busy.
+    ;; In case `proof-action-list' is empty and only
+    ;; `proof-second-action-list-active' is t, the hook functions
+    ;; should clear the queue region and release the proof shell lock.
+    ;; `coq-par-user-interrupt' actually does this.
+    (run-hooks 'proof-shell-signal-interrupt-hook)
+    (if proof-shell-busy
+	(progn
+	  (setq proof-shell-interrupt-pending t)
+	  (with-current-buffer proof-shell-buffer
+	    (interrupt-process)))
+      (unless prover-was-busy
+	(error "Proof process not active!")))))
 
 
 
@@ -1086,6 +1124,23 @@ contains only invisible elements for Prooftree synchronization."
 
 	(setq cbitems (cons item
 			    (proof-shell-slurp-comments)))
+
+        ;; If proof-action-list is empty after removing the already
+        ;; processed actions and the last action was not already
+        ;; added by proof-shell-empty-action-list-command (prover
+        ;; specific), call it.
+        (when (and (null proof-action-list)
+                   (not (memq 'empty-action-list flags))
+                   proof-shell-empty-action-list-command)
+          (let* ((cmd (mapconcat 'identity (nth 1 item) " "))
+                (extra-cmds (apply proof-shell-empty-action-list-command (list cmd)))
+                ;; tag all new items with 'empty-action-list
+                (extra-items (mapcar (lambda (s) (proof-shell-action-list-item
+                                                  s 'proof-done-invisible
+                                                  (list 'invisible 'empty-action-list)))
+                                     extra-cmds)))
+            ;; action-list should be empty at this point
+            (setq proof-action-list (append extra-items proof-action-list))))
 
 	;; This is the point where old items have been removed from
 	;; proof-action-list and where the next item has not yet been
@@ -1872,7 +1927,6 @@ Error messages are displayed as usual."
 ;; Proof General shell mode definition
 ;;
 
-;(eval-and-compile			; to define vars
 ;;;###autoload
 (define-derived-mode proof-shell-mode scomint-mode
   "proof-shell" "Proof General shell mode class for proof assistant processes"

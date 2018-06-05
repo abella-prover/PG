@@ -1,13 +1,18 @@
 ;;; pg-user.el --- User level commands for Proof General
-;;
-;; Copyright (C) 2000-2010 LFCS Edinburgh.
-;; Copyright (c) 2010 Erik Martin-Dorel, ENS de Lyon (pg-protected-undo).
+
+;; This file is part of Proof General.
+
+;; Portions © Copyright 1994-2012  David Aspinall and University of Edinburgh
+;; Portions © Copyright 2003, 2012, 2014  Free Software Foundation, Inc.
+;; Portions © Copyright 2001-2017  Pierre Courtieu
+;; Portions © Copyright 2010, 2016  Erik Martin-Dorel
+;; Portions © Copyright 2011-2013, 2016-2017  Hendrik Tews
+;; Portions © Copyright 2015-2017  Clément Pit-Claudel
+
 ;; Author:     David Aspinall and others
+
 ;; License:    GPL (GNU GENERAL PUBLIC LICENSE)
-;;
-;; $Id$
-;;
-;;
+
 ;;; Commentary:
 ;;
 ;; This file defines some user-level commands.  Most of them
@@ -563,9 +568,9 @@ last use time, to discourage saving these into the users database."
 ;; NB: completion table is expected to be set when proof-script
 ;; is loaded!  Call `proof-script-add-completions' to update.
 
-(unless noninteractive ; during compilation
+(unless (bound-and-true-p byte-compile-current-file)
   (eval-after-load "completion"
-  '(proof-add-completions)))
+    '(proof-add-completions)))
 
 (defun proof-script-complete (&optional arg)
   "Like `complete' but case-fold-search set to proof-case-fold-search."
@@ -702,6 +707,16 @@ If NUM is negative, move upwards.  Return new span."
   (interactive "p")
   (pg-move-region-down (- num)))
 
+;; No key-binding is defined for these two functions:
+(defun pg-show-all-proofs ()
+  "Display all completed proofs in the buffer."
+  (interactive)
+  (pg-show-all-portions 'proof))
+
+(defun pg-hide-all-proofs ()
+  "Hide all completed proofs in the buffer."
+  (interactive)
+  (pg-show-all-portions 'proof 'hide))
 
 
 

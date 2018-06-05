@@ -1,9 +1,14 @@
 ;;; holes.el --- a little piece of elisp to define holes in your buffer
-;;
-;; Copyright (C) 2001 Pierre Courtieu
-;;
-;; $Id$
-;;
+
+;; This file is part of Proof General.
+
+;; Portions © Copyright 1994-2012  David Aspinall and University of Edinburgh
+;; Portions © Copyright 2003, 2012, 2014  Free Software Foundation, Inc.
+;; Portions © Copyright 2001-2017  Pierre Courtieu
+;; Portions © Copyright 2010, 2016  Erik Martin-Dorel
+;; Portions © Copyright 2011-2013, 2016-2017  Hendrik Tews
+;; Portions © Copyright 2015-2017  Clément Pit-Claudel
+
 ;; This file uses spans, an interface for extent (XEmacs) and overlays
 ;; (emacs), by Healfdene Goguen for the proofgeneral mode.
 ;;
@@ -11,7 +16,7 @@
 ;; cleaner.
 ;;
 ;; Further cleanups by David Aspinall.
-;;
+
 ;; This software is free software; you can redistribute it and/or
 ;; modify it under the terms of the GNU General Public
 ;; License version 2, as published by the Free Software Foundation.
@@ -22,20 +27,16 @@
 ;;
 ;; See the GNU General Public License version 2 for more details
 ;; (enclosed in the file GPL).
-;;
-;; See documentation in variable holes-short-doc.
-;;
 
 ;;; Commentary:
 ;;
+;; See documentation in variable holes-short-doc.
+;;
 ;; See documentation of `holes-mode'.
 
-
-(eval-when-compile 
-  (require 'span))
-(require 'cl)
-
 ;;; Code:
+(require 'span)
+(require 'cl)
 
 ;;;
 ;;; initialization
@@ -601,10 +602,9 @@ created.  Return the number of holes created."
   "Default hook after a skeleton insertion: put holes at each interesting position."
   ;; Not all versions of skeleton provide `skeleton-positions' and the
   ;; corresponding @ operation :-(
-  (unless (boundp 'mmm-inside-insert-by-key) ; pc: this hack is ok for me
-    (when (boundp 'skeleton-positions)
-      (dolist (pos skeleton-positions)	;; put holes here
-	(holes-set-make-active-hole pos pos)))))
+  (when (boundp 'skeleton-positions)
+    (dolist (pos skeleton-positions)	;; put holes here
+      (holes-set-make-active-hole pos pos))))
 
 (defconst holes-jump-doc
   (concat "Hit \\[holes-set-point-next-hole-destroy] to jump "

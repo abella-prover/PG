@@ -1,11 +1,18 @@
 ;;; unicode-tokens.el --- Support for control and symbol tokens
-;;
-;; Copyright(C) 2008-2010 David Aspinall / LFCS Edinburgh
+
+;; This file is part of Proof General.
+
+;; Portions © Copyright 1994-2012  David Aspinall and University of Edinburgh
+;; Portions © Copyright 2003, 2012, 2014  Free Software Foundation, Inc.
+;; Portions © Copyright 2001-2017  Pierre Courtieu
+;; Portions © Copyright 2010, 2016  Erik Martin-Dorel
+;; Portions © Copyright 2011-2013, 2016-2017  Hendrik Tews
+;; Portions © Copyright 2015-2017  Clément Pit-Claudel
+
 ;; Author:    David Aspinall <David.Aspinall@ed.ac.uk>
+
 ;; License:     GPL (GNU GENERAL PUBLIC LICENSE)
-;;
-;; $Id$
-;;
+
 ;; This is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
 ;; the Free Software Foundation; either version 2, or (at your option)
@@ -37,19 +44,13 @@
 ;; -- simplify/optimise property handling
 ;; -- support multiple modes with mode-local configs at once
 
-;;
 ;;; Code:
-;;
 
 (require 'cl)
 (require 'quail)
 
 (eval-when-compile
-  (require 'maths-menu)		; nuke compile warnings
-  ;; Emacs <24 compatibility
-  (when (and (fboundp 'flet)
-	     (not (get 'flet 'byte-obsolete-info)))
-    (defalias 'cl-flet 'flet)))
+  (require 'maths-menu))		; nuke compile warnings
 
 ;;
 ;; Customizable user options
@@ -427,16 +428,19 @@ This function also initialises the important tables for the mode."
     ;; hairy logic based on Coq-style vs Isabelle-style configs
     (if (string= "" (format unicode-tokens-token-format ""))
 	;; no special token format, parse separate words/symbols
-	(let* ((optoks
-		(remove* "^\\(?:\\sw\\|\\s_\\)+$"
-			 toks :test 'string-match))
-	       (idtoks
-		(set-difference toks optoks))
+ 	(let* ((tokextra (remove* "^\\(?:\\sw\\|\\s_\\)+$" toks :test 'string-match))
+               (toksymbwrd (set-difference toks tokextra))
+               ;; indentifier that are not pure words
+               (toksymb (remove* "^\\(?:\\sw\\)+$" toksymbwrd :test 'string-match))
+               ;; pure words
+               (tokwrd (set-difference toksymbwrd toksymb))
 	       (idorop
 		(concat "\\(\\_<"
-			(regexp-opt idtoks)
-			"\\_>\\|\\(?:\\B"
-			(regexp-opt optoks)
+                        (regexp-opt toksymb)
+                        "\\_>\\|\\(?:\\<"
+			(regexp-opt tokwrd)
+			"\\>\\)\\|\\(?:\\B"
+			(regexp-opt tokextra)
 			"\\B\\)\\)")))
 	  (if unicode-tokens-token-variant-format-regexp
 	      (format unicode-tokens-token-variant-format-regexp

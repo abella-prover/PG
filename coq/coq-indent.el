@@ -1,9 +1,17 @@
 ;;; coq-indent.el --- indentation for Coq
-;;
-;; Copyright (C) 2004-2006 LFCS Edinburgh.
+
+;; This file is part of Proof General.
+
+;; Portions © Copyright 1994-2012  David Aspinall and University of Edinburgh
+;; Portions © Copyright 2003, 2012, 2014  Free Software Foundation, Inc.
+;; Portions © Copyright 2001-2017  Pierre Courtieu
+;; Portions © Copyright 2010, 2016  Erik Martin-Dorel
+;; Portions © Copyright 2011-2013, 2016-2017  Hendrik Tews
+;; Portions © Copyright 2015-2017  Clément Pit-Claudel
+
 ;; Authors: Pierre Courtieu
 ;; Maintainer: Pierre Courtieu <courtieu@lri.fr>
-;;
+
 ;; Commentary:
 ;; 
 ;; Indentation for Coq.
@@ -22,7 +30,7 @@
 ;     (message "%.06f" (float-time (time-since time)))))
 
 (eval-when-compile
-  (defvar coq-script-indent nil))
+  (defvar coq-script-indent))
 
 (defconst coq-any-command-regexp
   (proof-regexp-alt-list coq-keywords))
@@ -104,13 +112,19 @@ detect if they start something or not."
 
 No context checking.")
 
+;; Goal selector syntax
+(defconst coq-goal-selector-regexp "[0-9]+\\s-*:\\s-*")
+
 ;; We can detect precisely bullets (and curlies) by looking at there
 ;; prefix: the prefix should be a real "." then spaces then only
 ;; bullets and curlys and spaces). This is used when search backward.
 ;; This variable is the regexp of possible prefixes
 (defconst coq-bullet-prefix-regexp
   (concat "\\(?:\\(?:" coq-simple-cmd-ender-prefix-regexp "\\)"
-          "\\(?:\\.\\)\\(?:\\s-\\)\\(?:\\s-\\|{\\|}\\|-\\|+\\|\\*\\)*\\)"))
+          "\\(?:\\.\\)\\(?:\\s-\\)"
+          "\\(?:\\s-\\|"
+          "\\(?:" coq-goal-selector-regexp "\\)?"
+          "{\\|}\\|-\\|+\\|\\*\\)*\\)"))
 
 ;; matches regular command end (. and ... followed by a space or buffer end)
 ;; ". " and "... " are command endings, ".. " is not, same as in
@@ -152,7 +166,9 @@ There are 2 substrings:
 * number 2 is the left context matched that is not part of the bullet"  )
 
 (defconst coq-curlybracket-end-command
-  "\\(?:\\(?1:{\\)\\(?3:[^|]\\)\\|\\(?2:[^|]\\|\\=\\)\\(?1:}\\)\\)"
+  (concat "\\(?:\\(?1:"
+          "\\(?:" coq-bullet-prefix-regexp"\\)?"
+          "{\\)\\(?3:[^|]\\)\\|\\(?2:[^|]\\|\\=\\)\\(?1:}\\)\\)")
   "Matches ltac curlies when searching backward. Warning: False positive.
 
 There are 3 substrings (2 and 3 may be nil):
@@ -165,7 +181,10 @@ This matches more than real ltac curlies. See
 only when searching backward).")
 
 (defconst coq-curlybracket-end-command-backward
-  (concat "\\(?:\\(?2:" coq-bullet-prefix-regexp "\\)\\(?:\\(?:\\(?1:{\\)\\(?3:[^|]\\)\\)\\|\\(?1:}\\)\\)\\)")
+  (concat "\\(?:\\(?2:" coq-bullet-prefix-regexp "\\)"
+          "\\(?:\\(?:\\(?1:" "\\(?:" coq-goal-selector-regexp "\\)?{\\)"
+          "\\(?3:[^|]\\)\\)"
+          "\\|\\(?1:}\\)\\)\\)")
   "Matches ltac curly brackets when searching backward.
 
 This should match EXACTLY script structuring curlies. No false
@@ -357,8 +376,28 @@ Comments are ignored, of course."
         (start (coq-find-not-in-comment-backward "[^[:space:]]")))
     ;; we must find a "." to be sure, because {O} {P} is allowed in definitions
     ;; with implicits --> this function is recursive
-    (if (looking-at "{\\|}\\|-\\|\\+\\|\\*") (coq-empty-command-p)
-      (looking-at "\\.\\|\\`"))))
+    (cond
+     ;; "{" can be prefixed by a goal selector (coq-8.8).
+     ;; TODO: looking-back is supposed to be slow. Find something else? 
+     ((or (and (looking-at "{")(looking-back "[0-9]+\\s-*:\\s-*" nil t))
+          (and (looking-at ":\\s-*{")(looking-back "[0-9]+\\s-*" nil t))
+          (and (looking-at "[0-9]+:\\s-*{") nil t))
+      (goto-char (match-beginning 0)); swallow goal selector
+      (coq-empty-command-p))
+     ;; other bulleting syntax
+     ((looking-at "{\\|}\\|-\\|\\+\\|\\*") (coq-empty-command-p))
+     ;; vernacular controls Time, Fail, Redirect, Timeout
+     ((or (and (looking-at "e\\>") (looking-back "\\<Tim") (- (point) 3))
+          (and (looking-at "l\\>") (looking-back "\\<Fai") (- (point) 3))
+          (and (looking-at "\"") (looking-back "\\<Redirect\\s-+\"[^\"]+"))
+          (and (looking-at "[[:digit:]]\\_>") (looking-back "\\<Timeout\\s-+[[:digit:]]*")))
+      (goto-char (match-beginning 0))
+      (coq-empty-command-p))
+     ;; not a bullet, we found something else, it should be either a
+     ;; dot or the beginning of the file, otherwise we are in the
+     ;; middle of a command
+     (t (looking-at "\\.\\|\\`"))
+     )))
 
 
 ; slight modification of proof-script-generic-parse-cmdend (one of the

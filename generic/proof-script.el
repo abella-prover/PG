@@ -1,12 +1,19 @@
 ;;; proof-script.el --- Major mode for proof assistant script files.
-;;
-;; Copyright (C) 1994-2010 LFCS Edinburgh.
+
+;; This file is part of Proof General.
+
+;; Portions © Copyright 1994-2012  David Aspinall and University of Edinburgh
+;; Portions © Copyright 2003, 2012, 2014  Free Software Foundation, Inc.
+;; Portions © Copyright 2001-2017  Pierre Courtieu
+;; Portions © Copyright 2010, 2016  Erik Martin-Dorel
+;; Portions © Copyright 2011-2013, 2016-2017  Hendrik Tews
+;; Portions © Copyright 2015-2017  Clément Pit-Claudel
+
 ;; Authors:   David Aspinall, Yves Bertot, Healfdene Goguen,
 ;;            Thomas Kleymann and Dilip Sequeira
+
 ;; License:   GPL (GNU GENERAL PUBLIC LICENSE)
-;;
-;; $Id$
-;;
+
 ;;; Commentary:
 ;;
 ;; This implements the main mode for script management, including
@@ -632,17 +639,6 @@ IDIOMSYM is a symbol and ID is a strings."
     (when elts
       (proof-with-script-buffer ; may be called from menu
        (maphash alterfn elts)))))
-
-;; Next two could be in pg-user.el.  No key-bindings for these.
-(defun pg-show-all-proofs ()
-  "Display all completed proofs in the buffer."
-  (interactive)
-  (pg-show-all-portions "proof"))
-
-(defun pg-hide-all-proofs ()
-  "Hide all completed proofs in the buffer."
-  (interactive)
-  (pg-show-all-portions "proof" 'hide))
 
 (defun pg-add-proof-element (name span controlspan)
   "Add a span proof element to SPAN with name NAME and parent CONTROLSPAN."
@@ -1989,11 +1985,12 @@ No effect if prover is busy."
       (proof-interrupt-process)
       (proof-shell-wait))
     (save-excursion
-      (save-restriction ;; see Trac#403
-	(widen)
-	(goto-char beg)
-	(proof-retract-until-point)
-	(proof-shell-wait)))))
+      (save-match-data ;; see PG#41
+        (save-restriction ;; see Trac#403
+          (widen)
+          (goto-char beg)
+          (proof-retract-until-point)
+          (proof-shell-wait))))))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -2564,9 +2561,10 @@ finish setup which depends on specific proof assistant configuration."
   ;; Additional key def for (first character of) terminal string
   (if proof-terminal-string
       (progn
-	(define-key proof-mode-map
-	  (vconcat [(control c)] (vector (aref proof-terminal-string 0)))
-	  'proof-electric-terminator-toggle)
+;; This key-binding was disabled following a request in PG issue #160.
+;;	(define-key proof-mode-map
+;;	  (vconcat [(control c)] (vector (aref proof-terminal-string 0)))
+;;	  'proof-electric-terminator-toggle)
 	(define-key proof-mode-map (vector (aref proof-terminal-string 0))
 	  'proof-electric-terminator)))
 

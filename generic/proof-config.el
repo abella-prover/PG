@@ -1,11 +1,18 @@
 ;;; proof-config.el --- Proof General configuration for proof assistant
-;;
-;; Copyright (C) 1998-2010 LFCS Edinburgh.
+
+;; This file is part of Proof General.
+
+;; Portions © Copyright 1994-2012  David Aspinall and University of Edinburgh
+;; Portions © Copyright 2003, 2012, 2014  Free Software Foundation, Inc.
+;; Portions © Copyright 2001-2017  Pierre Courtieu
+;; Portions © Copyright 2010, 2016  Erik Martin-Dorel
+;; Portions © Copyright 2011-2013, 2016-2017  Hendrik Tews
+;; Portions © Copyright 2015-2017  Clément Pit-Claudel
+
 ;; Author:      David Aspinall <David.Aspinall@ed.ac.uk> and others
+
 ;; License:     GPL (GNU GENERAL PUBLIC LICENSE)
-;;
-;; $Id$
-;;
+
 ;;; Commentary:
 ;;
 ;; This file declares all prover-specific configuration variables for
@@ -1187,6 +1194,24 @@ If nil, use the whole of the output from the match on
   :type '(choice (const nil) regexp)
   :group 'proof-shell)
 
+(defcustom proof-shell-empty-action-list-command nil
+  "A function returning a list of commands (strings) to be sent
+to the prover when the last command in the queue has been
+performed. Typically to ask for some informational
+display (goals, etc).
+
+The function takes as argument the last command in the queue.
+
+NOTE 1: The commands will be tagged invisible, i.e. not related
+to a place in the buffer.
+
+NOTE 2: The commands should NOT have any effect on the state of
+the prover. Otherwise running the script outside pg would be
+inconsistent."
+  :type 'function
+  :group 'proof-shell)
+
+
 (defcustom proof-shell-eager-annotation-start nil
   "Eager annotation field start.  A regular expression or nil.
 An \"eager annotation indicates\" to Proof General that some following output
@@ -1683,7 +1708,12 @@ tries to interrupt the proof process. It is therefore run earlier
 than `proof-shell-handle-error-or-interrupt-hook', which runs
 when the interrupt is acknowledged inside `proof-shell-exec-loop'.
 
-This hook also runs when the proof assistent is killed."
+This hook also runs when the proof assistent is killed.
+
+Hook functions should set the dynamic variable `prover-was-busy'
+to t if there might have been a reason to interrupt. Otherwise
+the generic interrupt handler might issue a prover-not-busy
+error."
   :type '(repeat function)
   :group 'proof-shell)
 

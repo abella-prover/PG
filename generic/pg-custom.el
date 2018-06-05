@@ -1,11 +1,18 @@
 ;;; pg-custom.el --- Proof General per-prover settings
-;;
-;; Copyright (C) 2008, 2010 LFCS Edinburgh.
+
+;; This file is part of Proof General.
+
+;; Portions © Copyright 1994-2012  David Aspinall and University of Edinburgh
+;; Portions © Copyright 2003, 2012, 2014  Free Software Foundation, Inc.
+;; Portions © Copyright 2001-2017  Pierre Courtieu
+;; Portions © Copyright 2010, 2016  Erik Martin-Dorel
+;; Portions © Copyright 2011-2013, 2016-2017  Hendrik Tews
+;; Portions © Copyright 2015-2017  Clément Pit-Claudel
+
 ;; Author:      David Aspinall <David.Aspinall@ed.ac.uk> and others
+
 ;; License:     GPL (GNU GENERAL PUBLIC LICENSE)
-;;
-;; $Id$
-;;
+
 ;;; Commentary:
 ;;
 ;; Prover specific settings and user options.
@@ -150,7 +157,7 @@ Completion is activated with \\[complete].
 
 If this table is empty or needs adjusting, please make changes using
 `customize-variable' and post suggestions at
-http://proofgeneral.inf.ed.ac.uk/trac"
+https://github.com/ProofGeneral/PG/issues"
   :type '(repeat string)
   :group 'prover-config)
 
@@ -193,17 +200,6 @@ Currently this setting is UNIMPLEMENTED, changes have no effect."
   :type 'boolean
   :set 'proof-set-value
   :group 'proof-user-options)
-
-(defpgcustom mmm-enable nil
-  "*Whether to use MMM Mode in Proof General for this assistant.
-MMM Mode allows multiple modes to be used in the same buffer.
-If you activate this variable, whether or not you really get MMM
-support depends on whether your proof assistant supports it."
-  :type 'boolean
-  :set 'proof-set-value
-  :group 'proof-user-options)
-
-
 
 (provide 'pg-custom)
 

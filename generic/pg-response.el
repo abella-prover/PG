@@ -1,12 +1,19 @@
-;; pg-response.el --- Proof General response buffer mode.
-;;
-;; Copyright (C) 1994-2010 LFCS Edinburgh.
+;;; pg-response.el --- Proof General response buffer mode.
+
+;; This file is part of Proof General.
+
+;; Portions © Copyright 1994-2012  David Aspinall and University of Edinburgh
+;; Portions © Copyright 2003, 2012, 2014  Free Software Foundation, Inc.
+;; Portions © Copyright 2001-2017  Pierre Courtieu
+;; Portions © Copyright 2010, 2016  Erik Martin-Dorel
+;; Portions © Copyright 2011-2013, 2016-2017  Hendrik Tews
+;; Portions © Copyright 2015-2017  Clément Pit-Claudel
+
 ;; Authors:   David Aspinall, Healfdene Goguen,
 ;;		Thomas Kleymann and Dilip Sequeira
+
 ;; License:   GPL (GNU GENERAL PUBLIC LICENSE)
-;;
-;; pg-response.el,v 12.10 2012/09/25 09:44:18 pier Exp
-;;
+
 ;;; Commentary:
 ;;
 ;; This mode is used for the response buffer proper, and
@@ -22,6 +29,7 @@
   (defvar proof-assistant-menu nil))
 
 (require 'pg-assoc)
+(require 'span)
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -98,33 +106,21 @@ Internal variable, setting this will have no effect!")
   "List of GNU Emacs frame parameters for secondary frames.")
 
 (defun proof-multiple-frames-enable ()
-  ; special-display-regexps is obsolete, let us let it for a while and
-  ; remove it later
-  (unless (eval-when-compile (boundp 'display-buffer-alist))
-    (let ((spdres (cons
-		   pg-response-special-display-regexp
-		   proof-multiframe-parameters)))
-      (if proof-multiple-frames-enable
-	  (add-to-list 'special-display-regexps spdres)
-	(setq special-display-regexps
-	      (delete spdres special-display-regexps)))))
-  ; This is the current way to do it
-  (when (eval-when-compile (boundp 'display-buffer-alist))
-    (let
-	((display-buffer-entry
-	  (cons pg-response-special-display-regexp
-	    `((display-buffer-reuse-window display-buffer-pop-up-frame) .
-	      ((reusable-frames . t)
-	       (pop-up-frame-parameters
-		.
-		,proof-multiframe-parameters))))))
-      (if proof-multiple-frames-enable
-	  (add-to-list
-	   'display-buffer-alist
-	   display-buffer-entry)
-	;(add-to-list 'display-buffer-alist (proof-buffer-dislay))
-	(setq display-buffer-alist
-	      (delete display-buffer-entry display-buffer-alist)))))
+  (let
+      ((display-buffer-entry
+        (cons pg-response-special-display-regexp
+          `((display-buffer-reuse-window display-buffer-pop-up-frame) .
+            ((reusable-frames . t)
+             (pop-up-frame-parameters
+              .
+              ,proof-multiframe-parameters))))))
+    (if proof-multiple-frames-enable
+        (add-to-list
+         'display-buffer-alist
+         display-buffer-entry)
+      ;(add-to-list 'display-buffer-alist (proof-buffer-dislay))
+      (setq display-buffer-alist
+            (delete display-buffer-entry display-buffer-alist))))
   (proof-layout-windows))
 
 (defun proof-three-window-enable ()
@@ -157,23 +153,29 @@ Following POLICY, which can be one of 'smart, 'horizontal,
       (other-window 1)
       (switch-to-buffer b2)
       (proof-safe-split-window-vertically) ; enlarge vertically if necessary
+      (set-window-dedicated-p (selected-window) proof-three-window-enable)
       (other-window 1)
-      (switch-to-buffer b3))
+      (switch-to-buffer b3)
+      (set-window-dedicated-p (selected-window) proof-three-window-enable))
      ((eq pol 'vertical)
       (split-window-vertically)
       (other-window 1)
       (switch-to-buffer b2)
       (proof-safe-split-window-vertically) ; enlarge vertically if necessary
+      (set-window-dedicated-p (selected-window) proof-three-window-enable)
       (other-window 1)
-      (switch-to-buffer b3))
+      (switch-to-buffer b3)
+      (set-window-dedicated-p (selected-window) proof-three-window-enable))
      ((eq pol 'horizontal)
       (split-window-horizontally) ; horizontally again
       (other-window 1)
       (switch-to-buffer b2)
       (enlarge-window (/ (frame-width) 6) t) ; take 2/3 of width before splitting again
       (split-window-horizontally) ; horizontally again
+      (set-window-dedicated-p (selected-window) proof-three-window-enable)
       (other-window 1)
-      (switch-to-buffer b3))))))
+      (switch-to-buffer b3)
+      (set-window-dedicated-p (selected-window) proof-three-window-enable))))))
 
 
 
@@ -270,7 +272,7 @@ dragging the separating bars.
     (proof-delete-all-associated-windows)
     (set-window-dedicated-p (selected-window) nil)
     (proof-display-three-b proof-three-window-mode-policy))
-   ;; Two-of-three window mode.
+   ;; Two window mode.
    ;; Show the response buffer as first in preference order.
    (t
     ;; If we are coming from multiple frame mode, delete associated
@@ -514,9 +516,7 @@ and start at the first error."
 			  ;; Pop up a window.
 			  (display-buffer
                            proof-response-buffer
-                           (and (eval-when-compile
-                                  (boundp 'display-buffer-alist))
-                                proof-multiple-frames-enable
+                           (and proof-multiple-frames-enable
                                 (cons nil proof-multiframe-parameters))))))
 		  ;; Make sure the response buffer stays where it is,
 		  ;; and make sure source buffer is visible

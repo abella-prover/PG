@@ -33,12 +33,10 @@ EMACS=$(shell if [ -z "`which emacs`" ]; then echo "Emacs executable not found";
 PREFIX=$(DESTDIR)/usr
 DEST_PREFIX=$(DESTDIR)/usr
 
-PWD=$(shell pwd)
-
-PROVERS=acl2 ccc coq hol98 isar lego hol-light phox pgshell pgocaml pghaskell
-OTHER_ELISP=generic lib contrib/mmm
+PROVERS=acl2 ccc coq easycrypt hol-light hol98 isar lego pghaskell pgocaml pgshell phox twelf
+OTHER_ELISP=generic lib
 ELISP_DIRS=${PROVERS} ${OTHER_ELISP}
-ELISP_EXTRAS=isar/interface isar/isartags
+ELISP_EXTRAS=
 EXTRA_DIRS = images
 
 DOC_FILES=AUTHORS BUGS COMPATIBILITY CHANGES COPYING INSTALL README REGISTER doc/*.pdf
@@ -48,20 +46,18 @@ DOC_SUBDIRS=${DOC_EXAMPLES} */README* */CHANGES */BUGS
 BATCHEMACS=${EMACS} --batch --no-site-file -q 
 
 # Scripts to edit paths to shells
-BASH_SCRIPTS = isar/interface bin/proofgeneral
+BASH_SCRIPTS = isar/interface
 PERL_SCRIPTS = lego/legotags coq/coqtags isar/isartags
-# Scripts to edit path to PG
-PG_SCRIPTS = bin/proofgeneral
 
 # Scripts to install to bin directory
-BIN_SCRIPTS = bin/proofgeneral lego/legotags coq/coqtags isar/isartags
+BIN_SCRIPTS = lego/legotags coq/coqtags isar/isartags
 
 # Setting load path might be better in Elisp, but seems tricky to do
 # only during compilation.  Another idea: put a function in proof-site
 # to output the compile-time load path and ELISP_DIRS so these are set
 # just in that one place.
 ERROR_ON_WARN = nil
-BYTECOMP = $(BATCHEMACS) -eval '(setq load-path (append (mapcar (lambda (d) (concat "${PWD}/" (symbol-name d))) (quote (${ELISP_DIRS}))) load-path))' -eval '(progn (require (quote bytecomp)) (require (quote mouse)) (require (quote tool-bar)) (require (quote fontset)) (setq byte-compile-warnings (remove (quote cl-functions) (remove (quote noruntime) byte-compile-warning-types))) (setq byte-compile-error-on-warn $(ERROR_ON_WARN)))' -f batch-byte-compile
+BYTECOMP = $(BATCHEMACS) -eval '(setq load-path (append (mapcar (lambda (d) (expand-file-name (symbol-name d))) (quote (${ELISP_DIRS}))) load-path))' -eval '(progn (require (quote bytecomp)) (require (quote mouse)) (require (quote tool-bar)) (require (quote fontset)) (setq byte-compile-warnings (remove (quote cl-functions) (remove (quote noruntime) byte-compile-warning-types))) (setq byte-compile-error-on-warn $(ERROR_ON_WARN)))' -f batch-byte-compile
 EL=$(shell for f in $(ELISP_DIRS); do ls $$f/*.el; done)
 ELC=$(EL:.el=.elc)
 
@@ -133,7 +129,7 @@ all:	compile
 ##
 ## Remove generated targets
 ##
-clean:	cleanpgscripts
+clean:	cleanscripts
 	rm -f $(ELC) .\#* */.\#* */.autotest.log */.profile.log
 	(cd doc; $(MAKE) clean)
 
@@ -162,14 +158,16 @@ INFODIR=${PREFIX}/share/info
 install: install-desktop install-elisp install-bin install-init
 
 install-desktop:
-	mkdir -p ${DESKTOP}/icons/hicolor/16x16
-	cp etc/desktop/icons/16x16/proofgeneral.png ${DESKTOP}/icons/hicolor/16x16
-	mkdir -p ${DESKTOP}/icons/hicolor/32x32
-	cp etc/desktop/icons/32x32/proofgeneral.png ${DESKTOP}/icons/hicolor/32x32
-	mkdir -p ${DESKTOP}/icons/hicolor/48x48
-	cp etc/desktop/icons/48x48/proofgeneral.png ${DESKTOP}/icons/hicolor/48x48
-	mkdir -p ${DESKTOP}/pixmaps
-	cp etc/desktop/icons/48x48/proofgeneral.png ${DESKTOP}/pixmaps
+	mkdir -p ${DESKTOP}/icons/hicolor/16x16/apps
+	cp etc/desktop/icons/16x16/proofgeneral.png ${DESKTOP}/icons/hicolor/16x16/apps
+	mkdir -p ${DESKTOP}/icons/hicolor/32x32/apps
+	cp etc/desktop/icons/32x32/proofgeneral.png ${DESKTOP}/icons/hicolor/32x32/apps
+	mkdir -p ${DESKTOP}/icons/hicolor/48x48/apps
+	cp etc/desktop/icons/48x48/proofgeneral.png ${DESKTOP}/icons/hicolor/48x48/apps
+	mkdir -p ${DESKTOP}/icons/hicolor/64x64/apps
+	cp etc/desktop/icons/64x64/proofgeneral.png ${DESKTOP}/icons/hicolor/64x64/apps
+	mkdir -p ${DESKTOP}/icons/hicolor/128x128/apps
+	cp etc/desktop/icons/128x128/proofgeneral.png ${DESKTOP}/icons/hicolor/128x128/apps
 	mkdir -p ${DESKTOP}/applications
 	cp etc/desktop/proofgeneral.desktop ${DESKTOP}/applications
 	mkdir -p ${DESKTOP}/mime-info
@@ -232,48 +230,42 @@ doc.%: FORCE
 ##
 ## scripts: try to patch bash and perl scripts with correct paths
 ##
-scripts: bashscripts perlscripts pgscripts
+.PHONY: scripts
+scripts: bashscripts perlscripts
 
+.PHONY: bashscripts
 bashscripts:
-	@(bash="`which bash`"; \
+	(bash="`which bash`"; \
 	 if [ -z "$$bash" ]; then \
 	   echo "Could not find bash - bash paths not checked" >&2; \
 	   exit 0; \
 	 fi; \
 	 for i in $(BASH_SCRIPTS); do \
-	   sed "s|^#.*!.*/bin/bash.*$$|#!$$bash|" < $$i > .tmp \
-	   && cat .tmp > $$i; \
-	 done; \
-	 rm -f .tmp)
+	   sed -i.orig "s|^#.*!.*/bin/bash.*$$|#!$$bash|" $$i; \
+	 done)
 
+.PHONY: perlscripts
 perlscripts:
-	@(perl="`which perl`"; \
+	(perl="`which perl`"; \
 	 if [ -z "$$perl" ]; then \
 	   echo "Could not find perl - perl paths not checked" >&2; \
 	   exit 0; \
 	 fi; \
 	 for i in $(PERL_SCRIPTS); do \
-	   sed "s|^#.*!.*/bin/perl.*$$|#!$$perl|" < $$i > .tmp \
-	   && cat .tmp > $$i; \
-	 done; \
-	 rm -f .tmp)
-
-# FIXME: this next edit is really for install case, shouldn't be made
-# just when user types 'make'
-pgscripts:
-	@(for i in $(PG_SCRIPTS); do \
-	   sed "s|PGHOMEDEFAULT=.*$$|PGHOMEDEFAULT=${DEST_ELISP}|" < $$i > .tmp \
-	   && cat .tmp > $$i; \
-	 done; \
-	 rm -f .tmp)
+	   sed -i.orig "s|^#.*!.*/bin/perl.*$$|#!$$perl|" $$i; \
+	 done)
 
 # Set PGHOME path in scripts back to default location.
-cleanpgscripts:
-	@(for i in $(PG_SCRIPTS); do \
-	   sed "s|PGHOMEDEFAULT=.*$$|PGHOMEDEFAULT=\$$HOME/ProofGeneral|" < $$i > .tmp \
-	   && cat .tmp > $$i; \
-	 done; \
-	 rm -f .tmp)
+.PHONY: cleanscripts
+cleanscripts:
+	(for i in $(BASH_SCRIPTS) $(PERL_SCRIPTS); do \
+	   if [ -f $$i.rm ] ; then \
+	     rm -f $$i.rm; \
+	   fi; \
+	   if [ -f $$i.orig ] ; then \
+             mv -f $$i.orig $$i; \
+           fi; \
+	 done)
 
 ##
 ## Include developer's makefile if it exists here.

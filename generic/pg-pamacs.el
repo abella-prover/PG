@@ -1,8 +1,16 @@
 ;;; pg-pamacs.el --- Macros for per-proof assistant configuration
-;;
-;; Copyright (C) 2010, 2011  LFCS Edinburgh, David Aspinall.
-;;
+
+;; This file is part of Proof General.
+
+;; Portions © Copyright 1994-2012  David Aspinall and University of Edinburgh
+;; Portions © Copyright 2003, 2012, 2014  Free Software Foundation, Inc.
+;; Portions © Copyright 2001-2017  Pierre Courtieu
+;; Portions © Copyright 2010, 2016  Erik Martin-Dorel
+;; Portions © Copyright 2011-2013, 2016-2017  Hendrik Tews
+;; Portions © Copyright 2015-2017  Clément Pit-Claudel
+
 ;; Author: David Aspinall <da@longitude>
+
 ;; Keywords: internal
 
 ;;; Commentary:
@@ -24,13 +32,12 @@
 ;;
 ;; (proof-ass name)  or (proof-assistant-name)
 ;;
-;;
+
+;;; Code:
 
 (require 'proof-site)			; proof-assitant-symbol
 (require 'proof-compat)			; pg-custom-undeclare-variable
 (require 'proof-autoloads)		; proof-debug
-
-;;; Code:
 
 (defmacro deflocal (var value &optional docstring)
   "Define a buffer local variable VAR with default value VALUE."
@@ -155,6 +162,8 @@ Usage: (defpgdefault SYM VALUE)"
 ;;;###autoload
 (defun proof-defpacustom-fn (name val args)
   "As for macro `defpacustom' but evaluating arguments."
+  (unless (and proof-assistant (not (string= proof-assistant "")))
+    (error "No proof assistant defined"))
   (let (newargs setting evalform type descr)
     (while args
       (cond
@@ -228,7 +237,9 @@ which can be changed by sending commands.
 In this case, NAME stands for the internal setting, flag, etc,
 for the proof assistant, and a :setting and :type value should be
 provided.  The :type of NAME should be one of 'integer, 'float,
-'boolean, 'string.
+'boolean, 'string. Other types are not supported (see
+`proof-menu-entry-for-setting'). They will yield an error when
+constructing the proof assistant menu.
 
 The function `proof-assistant-format' is used to format VAL.
 
@@ -255,10 +266,6 @@ Additional properties in the ARGS prop list may include:
 		     askprefs message.
 
 This macro also extends the `proof-assistant-settings' list."
-  (eval-when-compile
-    (if (boundp 'proof-assistant-symbol)
-	;; declare variable to compiler to prevent warnings
-	(eval `(defvar ,(proof-ass-sym name) nil "Dummy for compilation."))))
   `(proof-defpacustom-fn (quote ,name) (quote ,val) (quote ,args)))
 
 

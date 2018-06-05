@@ -1,8 +1,17 @@
-;;; -*- coding: utf-8; -*-
-;; coq-unicode-tokens.el --- (No) Tokens for Unicode Tokens package
-;;
-;; Copyright(C) 2008, 2009 David Aspinall / LFCS Edinburgh
+;;; coq-unicode-tokens.el --- (No) Tokens for Unicode Tokens package -*- coding: utf-8; -*-
+
+;; This file is part of Proof General.
+
+;; Portions © Copyright 1994-2012  David Aspinall and University of Edinburgh
+;; Portions © Copyright 2003, 2012, 2014  Free Software Foundation, Inc.
+;; Portions © Copyright 2001-2017  Pierre Courtieu
+;; Portions © Copyright 2010, 2016  Erik Martin-Dorel
+;; Portions © Copyright 2011-2013, 2016-2017  Hendrik Tews
+;; Portions © Copyright 2015-2017  Clément Pit-Claudel
+
 ;; Author:    David Aspinall <David.Aspinall@ed.ac.uk>
+
+;;; Commentary:
 ;;
 ;; This file is loaded by `proof-unicode-tokens.el'.
 ;;
@@ -36,7 +45,7 @@
 
 (require 'proof-unicode-tokens)
 
-(defconst coq-token-format "%s")	; plain tokens
+(defconst coq-token-format "") ; Let generic code do the job
 (defconst coq-token-match nil)
 (defconst coq-hexcode-match nil)
 
@@ -253,24 +262,29 @@ meaning to be useful."
 
 (defconst coq-control-char-format-regexp
   ;; FIXME: fix Coq identifier syntax below
-  "\\(\s*%s\s*\\)\\([a-zA-Z0-9']+\\)")
+  ;;  "\\(\s_*%s\s_*\\)\\([a-zA-Z0-9']+\\)"
+  "\\(%s\\)\\(\\sw*\\)"
+ )
 
-(defconst coq-control-char-format " %s ")
+;; (defconst coq-control-char-format " %s ")
 
 (defconst coq-control-characters
   '(("Subscript" "__" sub)
     ("Superscript" "^^" sup)))
 
-(defconst coq-control-region-format-regexp "\\(\s*%s\{\\)\\([^}]*\\)\\(\}\s*\\)")
+;(defconst coq-control-region-format-regexp "\\(\s*%s\{\\)\\([^}]*\\)\\(\}\s*\\)")
+(defconst coq-control-region-format-regexp "\\(%s\{\\)\\([^}]*\\)\\(\}\\)")
 
 (defconst coq-control-regions
   '(("Subscript" "," "" sub)
+    ("Subscript" "_" "" sub)
     ("Superscript" "^" "" sup)
-    ("Bold" "BOLD" "" bold)
-    ("Italic" "ITALIC" "" italic)
-    ("Script" "SCRIPT" "" script)
-    ("Frakt"  "FRACT" "" frakt)
-    ("Roman"  "ROMAN" "" serif)))
+;    ("Bold" "BOLD" "" bold)
+;    ("Italic" "ITALIC" "" italic)
+;    ("Script" "SCRIPT" "" script)
+;    ("Frakt"  "FRACT" "" frakt)
+;    ("Roman"  "ROMAN" "" serif)
+))
 
 
 

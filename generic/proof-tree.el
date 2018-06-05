@@ -1,11 +1,18 @@
 ;;; tree-tree.el --- Proof General prooftree communication.
-;;
-;; Copyright (C) 2012 Hendrik Tews
+
+;; This file is part of Proof General.
+
+;; Portions © Copyright 1994-2012  David Aspinall and University of Edinburgh
+;; Portions © Copyright 2003, 2012, 2014  Free Software Foundation, Inc.
+;; Portions © Copyright 2001-2017  Pierre Courtieu
+;; Portions © Copyright 2010, 2016  Erik Martin-Dorel
+;; Portions © Copyright 2011-2013, 2016-2017  Hendrik Tews
+;; Portions © Copyright 2015-2017  Clément Pit-Claudel
+
 ;; Authors:   Hendrik Tews
+
 ;; License:   GPL (GNU GENERAL PUBLIC LICENSE)
-;;
-;; $Id$
-;;
+
 ;;; Commentary:
 ;;
 ;; Generic code for the communication with prooftree. Prooftree
@@ -88,7 +95,7 @@
 
 (require 'cl)
 
-(eval-when (compile)
+(eval-when-compile
   (require 'proof-shell))
 
 
@@ -556,7 +563,8 @@ Runs on process status changes and cleans up when prooftree dies."
   "Start the external prooftree process.
 Does also initialize the communication channel and some internal
 variables."
-  (let ((old-proof-tree (get-process proof-tree-process-name)))
+  (let ((process-connection-type nil)	; use pipes, see emacs bug #24531
+	(old-proof-tree (get-process proof-tree-process-name)))
     ;; reset output marker
     (when proof-tree-output-marker
       (set-marker proof-tree-output-marker nil)
@@ -841,13 +849,14 @@ The not yet delayed output is in the region
 	 (start proof-shell-delayed-output-start)
 	 (end proof-shell-delayed-output-end)
 	 inst-ex-vars)
-    (when (and (not (memq 'proof-tree-show-subgoal flags))
-	       (> state proof-tree-last-state))
-      ;; Only deal with existentials if the proof assistant has them
-      ;; (i.e., proof-tree-existential-regexp is set) and if there are some
-      ;; goals with existentials.
-      (when (and proof-tree-existential-regexp
+    (unless (memq 'proof-tree-show-subgoal flags)
+      (when (and (> state proof-tree-last-state)
+		 proof-tree-existential-regexp
 		 proof-tree-existentials-alist)
+	;; Only deal with existentials if this is not and undo
+	;; command, if the proof assistant actually has existentials
+	;; (i.e., proof-tree-existential-regexp is set) and if there
+	;; are some goals with existentials.
 	(setq inst-ex-vars
 	      (with-current-buffer proof-shell-buffer
 		(funcall proof-tree-extract-instantiated-existentials
