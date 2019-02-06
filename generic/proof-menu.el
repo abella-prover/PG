@@ -3,7 +3,7 @@
 ;; This file is part of Proof General.
 
 ;; Portions © Copyright 1994-2012  David Aspinall and University of Edinburgh
-;; Portions © Copyright 2003, 2012, 2014  Free Software Foundation, Inc.
+;; Portions © Copyright 2003-2018  Free Software Foundation, Inc.
 ;; Portions © Copyright 2001-2017  Pierre Courtieu
 ;; Portions © Copyright 2010, 2016  Erik Martin-Dorel
 ;; Portions © Copyright 2011-2013, 2016-2017  Hendrik Tews
@@ -17,11 +17,10 @@
 ;;
 
 ;;; Code:
-(require 'cl)				; mapcan
+(require 'cl-lib)                       ; cl-mapcan, ...
 
-(eval-when-compile
-  (defvar proof-assistant-menu)	  ; defined by macro in proof-menu-define-specific
-  (defvar proof-mode-map))
+(defvar proof-assistant-menu)  ; defined by macro in proof-menu-define-specific
+(defvar proof-mode-map)
 
 (require 'proof-utils)    ; proof-deftoggle, proof-eval-when-ready-for-assistant
 (require 'proof-useropts)
@@ -50,24 +49,26 @@ without adjusting window layout."
   (cond
    ((and (called-interactively-p 'any)
 	 (eq last-command 'proof-display-some-buffers))
-    (incf proof-display-some-buffers-count))
+    (cl-incf proof-display-some-buffers-count))
    (t
     (setq proof-display-some-buffers-count 0)))
-  (let* ((assocbufs   (remove-if-not 'buffer-live-p
-				     (list proof-response-buffer
-					   proof-thms-buffer
-					   proof-trace-buffer
-					   proof-goals-buffer
-					   )))
+  (let* ((assocbufs   (cl-remove-if-not #'buffer-live-p
+				        (list proof-response-buffer
+					      proof-thms-buffer
+					      proof-trace-buffer
+					      proof-goals-buffer
+					      )))
 					;proof-shell-buffer
 	 (numassoc    (length assocbufs)))
     ;; If there's no live other buffers, we don't do anything.
     (unless (zerop numassoc)
       (let
 	 ((selectedbuf (nth (mod proof-display-some-buffers-count
-				 numassoc) assocbufs))
+				 numassoc)
+                            assocbufs))
 	  (nextbuf     (nth (mod (1+ proof-display-some-buffers-count)
-				 numassoc) assocbufs)))
+				 numassoc)
+                            assocbufs)))
 	(cond
 	 ((or proof-three-window-enable proof-multiple-frames-enable)
 	  ;; Display two buffers: next in rotation and goals/response
@@ -75,7 +76,8 @@ without adjusting window layout."
 	  (proof-switch-to-buffer selectedbuf 'noselect)
 	  (proof-switch-to-buffer (if (eq selectedbuf proof-goals-buffer)
 				      proof-response-buffer
-				    proof-goals-buffer) 'noselect))
+				    proof-goals-buffer)
+                                  'noselect))
 	 (selectedbuf
 	  (proof-switch-to-buffer selectedbuf 'noselect)))
 	(if (eq selectedbuf proof-response-buffer)
@@ -318,7 +320,7 @@ without adjusting window layout."
 (proof-deftoggle proof-delete-empty-windows)
 (proof-deftoggle proof-shrink-windows-tofit)
 (proof-deftoggle proof-multiple-frames-enable proof-multiple-frames-toggle)
-(proof-deftoggle proof-layout-windows-on-visit-file 
+(proof-deftoggle proof-layout-windows-on-visit-file
 		 proof-layout-windows-eagerly-toggle)
 (proof-deftoggle proof-three-window-enable proof-three-window-toggle)
 (proof-deftoggle proof-auto-raise-buffers proof-auto-raise-toggle)
@@ -342,7 +344,7 @@ without adjusting window layout."
    (proof-ass-sym maths-menu-enable) 'proof-maths-menu-toggle))
 
 (defun proof-keep-response-history ()
-  "Enable associated buffer histories following `proof-keep-response-history'."
+  "Enable associated buffer histories following option `proof-keep-response-history'."
   (if proof-keep-response-history
       (proof-map-buffers (proof-associated-buffers) (bufhist-init))
     (proof-map-buffers (proof-associated-buffers) (bufhist-exit))))
@@ -371,7 +373,7 @@ without adjusting window layout."
       ["Beep on Errors" proof-shell-quiet-errors-toggle
        :style toggle
        :selected (not proof-shell-quiet-errors)
-       :help "Beep on errors or interrupts"]      
+       :help "Beep on errors or interrupts"]
       ["Fly Past Comments" proof-script-fly-past-comments-toggle
        :style toggle
        :selected proof-script-fly-past-comments
@@ -613,7 +615,7 @@ without adjusting window layout."
 ;;
 
 (defun proof-set-document-centred ()
-  "Select options for document-centred working"
+  "Select options for document-centred working."
   (interactive)
   (proof-full-annotation-toggle 1)
   (proof-auto-raise-toggle 0)
@@ -626,9 +628,9 @@ without adjusting window layout."
 
 
 (defun proof-set-non-document-centred ()
-  "Set options for classic Proof General interaction"
+  "Set options for classic Proof General interaction."
   (interactive)
-  ;; default: (proof-full-annotation-toggle 1) 
+  ;; default: (proof-full-annotation-toggle 1)
   (proof-auto-raise-toggle 1)
   (proof-colour-locked-toggle 1)
   (proof-sticky-errors-toggle 0)
@@ -744,7 +746,7 @@ without adjusting window layout."
 ;;; Define stuff from favourites
 
 (defun proof-def-favourite (command inscript menuname &optional key new)
-  "Define and a \"favourite\" proof assisant function.
+  "Define and a \"favourite\" proof assistant function.
 See doc of `proof-add-favourite' for first four arguments.
 Extra NEW flag means that this should be a new favourite, so check
 that function defined is not already bound.
@@ -756,7 +758,7 @@ suitable for adding to the proof assistant menu."
     (while (and new (fboundp menu-fn))
       (setq menu-fn (intern (concat (symbol-name menuname-sym)
 				    "-" (int-to-string i))))
-      (incf i))
+      (cl-incf i))
     (if inscript
 	(eval `(proof-defshortcut ,menu-fn ,command ,key))
       (eval `(proof-definvisible ,menu-fn ,command ,key)))
@@ -790,8 +792,8 @@ suitable for adding to the proof assistant menu."
 		     nil t)))
   (let*
       ((favs       (proof-ass favourites))
-       (rmfavs	   (remove-if
-		    (lambda (f) (string-equal menuname (caddr f)))
+       (rmfavs	   (cl-remove-if
+		    (lambda (f) (string-equal menuname (cl-caddr f)))
 		    favs)))
     (unless (equal favs rmfavs)
       (easy-menu-remove-item proof-assistant-menu
@@ -832,8 +834,8 @@ KEY is the optional key binding."
   (let*
       ((menu-entry (proof-def-favourite command inscript menuname key t))
        (favs       (proof-ass favourites))
-       (rmfavs	   (remove-if
-		    (lambda (f) (string-equal menuname (caddr f)))
+       (rmfavs	   (cl-remove-if
+		    (lambda (f) (string-equal menuname (cl-caddr f)))
 		    favs))
        (newfavs    (append
 		    rmfavs
@@ -861,12 +863,12 @@ KEY is the optional key binding."
 	(mapc (lambda (stg) (add-to-list 'groups (get (car stg) 'pggroup)))
 	      proof-assistant-settings)
 	(dolist (grp (reverse groups))
-	  (let* ((gstgs (mapcan (lambda (stg)
-				  (if (eq (get (car stg) 'pggroup) grp)
-				      (list stg)))
-				proof-assistant-settings))
+	  (let* ((gstgs (cl-mapcan (lambda (stg)
+				     (if (eq (get (car stg) 'pggroup) grp)
+				         (list stg)))
+				   proof-assistant-settings))
 		 (cmds  (mapcar (lambda (stg)
-				  (apply 'proof-menu-entry-for-setting stg))
+				  (apply #'proof-menu-entry-for-setting stg))
 				(reverse gstgs))))
 	    (setq ents
 		  (if grp (cons (cons grp cmds) ents)
@@ -987,7 +989,7 @@ We first clear the dynamic settings from `proof-assistant-settings'."
   (let (cmds)
     (dolist (setting proof-assistant-settings)
       (let ((sym       (car setting))
-	    (pacmd     (cadr setting))) 
+	    (pacmd     (cadr setting)))
 	(if (and pacmd
 		 (or (not (get sym 'pgdynamic))
 		     (proof-ass-differs-from-default sym)))
@@ -1004,7 +1006,7 @@ We first clear the dynamic settings from `proof-assistant-settings'."
    (cons "%f" '(proof-assistant-format-float curvalue))
    (cons "%s" '(proof-assistant-format-string curvalue)))
   "Table to use with `proof-format' for formatting CURVALUE for assistant.
-NB: variable curvalue is dynamically scoped (used in `proof-assistant-format').")
+NB: variable `curvalue' is dynamically scoped (used in `proof-assistant-format').")
 
 (defun proof-assistant-format-bool (value)
   (if value proof-assistant-true-value proof-assistant-false-value))
@@ -1032,13 +1034,16 @@ value) and the second for false."
   (let ((setting
 	 (cond
 	  ((stringp string)   ;; use % format characters
-	   (proof-format proof-assistant-format-table string))
+           ;; Dynbind for use in proof-assistant-format-table!
+           (with-no-warnings (defvar curvalue))
+           (let ((curvalue curvalue))
+	     (proof-format proof-assistant-format-table string)))
 	  ((functionp string) ;; call the function
 	   (funcall string curvalue))
 	  ((consp string)     ;; true/false options
 	   (if curvalue (car string) (cdr string)))
 	  (t ;; no idea what to do
-	   (error "proof-assistant-format: called with invalid string arg %s" string)))))
+	   (error "Function proof-assistant-format: called with invalid string arg %s" string)))))
     (if proof-assistant-setting-format
 	(funcall proof-assistant-setting-format setting)
       setting)))

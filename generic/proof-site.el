@@ -1,9 +1,9 @@
-;;; proof-site.el --- Loading stubs for Proof General.
+;;; proof-site.el --- Loading stubs for Proof General  -*- lexical-binding:t -*-
 
 ;; This file is part of Proof General.
 
 ;; Portions © Copyright 1994-2012  David Aspinall and University of Edinburgh
-;; Portions © Copyright 2003, 2012, 2014  Free Software Foundation, Inc.
+;; Portions © Copyright 2003-2018  Free Software Foundation, Inc.
 ;; Portions © Copyright 2001-2017  Pierre Courtieu
 ;; Portions © Copyright 2010, 2016  Erik Martin-Dorel
 ;; Portions © Copyright 2011-2013, 2016-2017  Hendrik Tews
@@ -14,7 +14,7 @@
 ;; License:     GPL (GNU GENERAL PUBLIC LICENSE)
 
 ;;; Commentary:
-;; 
+;;
 ;; Loading stubs and configuration for site and choice of provers.
 ;;
 ;; NB: Normally users do not need to edit this file.  Developers/installers
@@ -32,12 +32,12 @@
 ;;; Code:
 
 ;; Entries in proof-assistant-table-default are lists of the form
-;; 
+;;
 ;;   (SYMBOL NAME FILE-EXTENSION [AUTOMODE-REGEXP] [IGNORED-EXTENSIONS-LIST])
 ;;
 ;; FILE-EXTENSION is without dot ".". AUTOMODE-REGEXP is put into
 ;; auto-mode-alist, if it is not present, a regexp will be made up from
-;; FILE-EXTENSION. IGNORED-EXTENSIONS-LIST, if present, is appended to 
+;; FILE-EXTENSION. IGNORED-EXTENSIONS-LIST, if present, is appended to
 ;; completion-ignored-extensions. See proof-assistant-table for more info.
 ;;
 (defconst proof-assistant-table-default
@@ -47,12 +47,12 @@
       (isar "Isabelle" "thy")
       (coq "Coq" "v" nil (".vo" ".glob"))
       (easycrypt "EasyCrypt" "ec" "\\.eca?\\'")
+      (phox "PhoX" "phx" nil (".phi" ".pho"))
 
       (abella "Abella" "thm")
 
       ;; Obscure instances or conflict with other Emacs modes.
 
-      ;; (phox "PhoX" "phx")
       ;; (lego "LEGO" "l")
       ;; (ccc    "CASL Consistency Checker" "ccc")
 
@@ -63,7 +63,7 @@
       (pgshell	 "PG-Shell" "pgsh")
       (pgocaml	 "PG-OCaml" "pgml")
       (pghaskell "PG-Haskell" "pghci")
-      
+
       ;; Incomplete/obsolete:
 
       ;; (hol98	"HOL" "sml")
@@ -82,7 +82,7 @@
 
 (eval-and-compile
   ;; WARNING: do not edit next line (constant is edited in Makefile.devel)
-  (defconst proof-general-version "Proof General Version 4.4.1~pre."
+  (defconst proof-general-version "Proof General Version 4.5-git."
     "Version string identifying Proof General release."))
 
 (defconst proof-general-short-version
@@ -158,7 +158,7 @@ You can use customize to set this variable."
 ;;
 
 (defun proof-add-to-load-path (dir)
-  "Add DIR to `load-path' if not contained already"
+  "Add DIR to `load-path' if not contained already."
   (add-to-list 'load-path dir))
 
 (proof-add-to-load-path (concat proof-home-directory "generic/"))
@@ -167,12 +167,12 @@ You can use customize to set this variable."
 
 ;; Declare some global variables and autoloads
 
-
-(require 'pg-vars)
+;; FIXME: Many of the autoloaded functions in there are internal to PG, and
+;; are useless until PG is loaded, so they shouldn't be defined just because
+;; proof-site is loaded!
 (require 'proof-autoloads)
 
-(eval-when-compile
-  (defvar Info-dir-contents))
+(defvar Info-dir-contents)
 
 ;; Add the info directory to the Info path
 (if (file-exists-p proof-info-directory) ; for safety
@@ -208,10 +208,10 @@ Each entry is a list of the form
 The NAME is a string, naming the proof assistant.
 The SYMBOL is used to form the name of the mode for the
 assistant, `SYMBOL-mode', run when files with AUTOMODE-REGEXP
-\(or with extension FILE-EXTENSION) are visited. If present,
+\(or with extension FILE-EXTENSION) are visited.  If present,
 IGNORED-EXTENSIONS-LIST is a list of file-name extensions to be
 ignored when doing file-name completion (IGNORED-EXTENSIONS-LIST
-is added to completion-ignored-extensions).
+is added to ‘completion-ignored-extensions’).
 
 SYMBOL is also used to form the name of the directory and elisp
 file for the mode, which will be
@@ -253,73 +253,21 @@ Note: to change proof assistant, you must start a new Emacs session.")
 		      proof-assistant-table))
   :group 'proof-general)
 
-;;;###autoload
-(defun proof-ready-for-assistant (assistantsym &optional assistant-name)
-  "Configure PG for symbol ASSISTANTSYM, name ASSISTANT-NAME.
-If ASSISTANT-NAME is omitted, look up in `proof-assistant-table'."
-  (unless proof-assistant-symbol
-    (let*
-      ((sname		 (symbol-name assistantsym))
-       (assistant-name   (or assistant-name
-			     (car-safe
-			      (cdr-safe (assoc assistantsym
-					       proof-assistant-table)))
-			     sname))
-       (cusgrp-rt
-	;; Normalized a bit to remove spaces and funny characters
-	(replace-regexp-in-string "/\\|[ \t]+" "-" (downcase assistant-name)))
-       (cusgrp	      (intern cusgrp-rt))
-       (cus-internals (intern (concat cusgrp-rt "-config")))
-       (elisp-dir     sname)		; NB: dirname same as symbol name!
-       (loadpath-elt  (concat proof-home-directory elisp-dir "/")))
-    (eval `(progn
-       ;; Make a customization group for this assistant
-       (defgroup ,cusgrp nil
-	 ,(concat "Customization of user options for " assistant-name
-		  " Proof General.")
-	 :group 'proof-general)
-       ;; And another one for internals
-       (defgroup ,cus-internals nil
-	 ,(concat "Customization of internal settings for "
-		  assistant-name " configuration.")
-	 :group 'proof-general-internals
-	 :prefix ,(concat sname "-"))
-
-       ;; Set the proof-assistant configuration variables
-       ;; NB: tempting to use customize-set-variable: wrong!
-       ;; Here we treat customize as extended docs for these
-       ;; variables.
-       (setq proof-assistant-cusgrp (quote ,cusgrp))
-       (setq proof-assistant-internals-cusgrp (quote ,cus-internals))
-       (setq proof-assistant ,assistant-name)
-       (setq proof-assistant-symbol (quote ,assistantsym))
-       ;; define the per-prover settings which depend on above
-       (require 'pg-custom)
-       (setq proof-mode-for-shell (proof-ass-sym shell-mode))
-       (setq proof-mode-for-response (proof-ass-sym response-mode))
-       (setq proof-mode-for-goals (proof-ass-sym goals-mode))
-       (setq proof-mode-for-script (proof-ass-sym mode))
-       ;; Extend the load path if necessary
-       (proof-add-to-load-path ,loadpath-elt)
-       ;; Run hooks for late initialisation
-       (run-hooks 'proof-ready-for-assistant-hook))))))
-
-
-(defvar proof-general-configured-provers 
+(defvar proof-general-configured-provers
   (or (mapcar 'intern (split-string (or (getenv "PROOFGENERAL_ASSISTANTS") "")))
       proof-assistants
       (mapcar (lambda (astnt) (car astnt)) proof-assistant-table))
   "A list of the configured proof assistants.
 Set on startup to contents of environment variable PROOFGENERAL_ASSISTANTS,
-the lisp variable `proof-assistants', or the contents of `proof-assistant-table'.")
-  
+the Lisp variable `proof-assistants', or the contents of `proof-assistant-table'.")
+
 ;; Add auto-loads and load-path elements to support the
 ;; proof assistants selected, and define stub major mode functions
 (let ((assistants proof-general-configured-provers))
   (while assistants
     (let*
 	((assistant (car assistants))	; compiler bogus warning here
-	 (tableentry 
+	 (tableentry
 	  (or (assoc assistant
 		     proof-assistant-table)
 	      (error "Symbol %s is not in proof-assistant-table (in proof-site)"
@@ -364,10 +312,10 @@ the lisp variable `proof-assistants', or the contents of `proof-assistant-table'
 	       (load-library ,elisp-file)
 	       (,proofgen-mode))))))
 
-	(setq auto-mode-alist
-	      (cons (cons regexp proofgen-mode) auto-mode-alist))
+	(add-to-list 'auto-mode-alist (cons regexp proofgen-mode))
 
-	(fset proofgen-mode mode-stub)
+        (unless (fboundp proofgen-mode)
+	  (fset proofgen-mode mode-stub))
 
 	(dolist (ext (nth 4 tableentry))
 	  (add-to-list 'completion-ignored-extensions ext))
@@ -379,16 +327,16 @@ the lisp variable `proof-assistants', or the contents of `proof-assistant-table'
 ;;
 
 (defun proof-chose-prover (prompt)
-  (completing-read prompt 
-		   (mapcar 'symbol-name 
+  (completing-read prompt
+		   (mapcar 'symbol-name
 			   proof-general-configured-provers)))
 
 (defun proofgeneral (prover)
   "Start proof general for prover PROVER."
   (interactive
    (list (proof-chose-prover "Start Proof General for theorem prover: ")))
-  (proof-ready-for-assistant (intern prover) 
-			     (nth 1 (assoc (intern prover) 
+  (proof-ready-for-assistant (intern prover)
+			     (nth 1 (assoc (intern prover)
 					   proof-assistant-table-default)))
   (require (intern prover)))
 
@@ -400,7 +348,7 @@ the lisp variable `proof-assistants', or the contents of `proof-assistant-table'
 		     prover "/example."
 		     (nth 2 (assoc (intern prover) proof-assistant-table-default)))))
 
-		     
+
 
 
 (provide 'proof-site)

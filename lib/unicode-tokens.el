@@ -46,7 +46,7 @@
 
 ;;; Code:
 
-(require 'cl)
+(require 'cl-lib)
 (require 'quail)
 
 (eval-when-compile
@@ -67,6 +67,7 @@
   :group 'unicode-tokens-options)
 
 (defun unicode-tokens-toggle-add-help-echo ()
+  "Toggle option ‘unicode-tokens-add-help-echo’."
   (interactive)
   (customize-set-variable 'unicode-tokens-add-help-echo
 			  (not unicode-tokens-add-help-echo))
@@ -264,7 +265,7 @@ This is used for an approximate reverse mapping, see `unicode-tokens-paste'.")
 ;;
 (defconst unicode-tokens-font-family-alternatives
   '(("STIXGeneral"
-     "DejaVu Sans Mono" "DejaVuLGC Sans Mono" 
+     "DejaVu Sans Mono" "DejaVuLGC Sans Mono"
      "Lucida Grande" "Lucida Sans Unicode" "Apple Symbols")
     ("Script"
      "Lucida Calligraphy" "URW Chancery L" "Zapf Chancery")
@@ -428,12 +429,12 @@ This function also initialises the important tables for the mode."
     ;; hairy logic based on Coq-style vs Isabelle-style configs
     (if (string= "" (format unicode-tokens-token-format ""))
 	;; no special token format, parse separate words/symbols
- 	(let* ((tokextra (remove* "^\\(?:\\sw\\|\\s_\\)+$" toks :test 'string-match))
-               (toksymbwrd (set-difference toks tokextra))
+ 	(let* ((tokextra (cl-remove "^\\(?:\\sw\\|\\s_\\)+$" toks :test 'string-match))
+               (toksymbwrd (cl-set-difference toks tokextra))
                ;; indentifier that are not pure words
-               (toksymb (remove* "^\\(?:\\sw\\)+$" toksymbwrd :test 'string-match))
+               (toksymb (cl-remove "^\\(?:\\sw\\)+$" toksymbwrd :test 'string-match))
                ;; pure words
-               (tokwrd (set-difference toksymbwrd toksymb))
+               (tokwrd (cl-set-difference toksymbwrd toksymb))
 	       (idorop
 		(concat "\\(\\_<"
                         (regexp-opt toksymb)
@@ -460,9 +461,9 @@ This function also initialises the important tables for the mode."
 The check is with `char-displayable-p'."
   (cond
    ((stringp comp)
-    (reduce (lambda (x y) (and x (char-displayable-p y)))
- 	    comp
- 	    :initial-value t))
+    (cl-reduce (lambda (x y) (and x (char-displayable-p y)))
+ 	       comp
+ 	       :initial-value t))
    ((characterp comp)
     (char-displayable-p comp))
    (comp ;; assume any other non-null is OK
@@ -517,7 +518,7 @@ The face property is set to the :family and :slant attriubutes taken from
 					    (car props) (cadr props))
 	    (setq props (cddr props)))))
     (unless (or unicode-tokens-show-symbols
-		(intersection unicode-tokens-fonts propsyms))
+		(cl-intersection unicode-tokens-fonts propsyms))
       (font-lock-append-text-property
        start end 'face
        ;; just use family and slant to enhance merging with other faces
@@ -679,7 +680,7 @@ Calculated from `unicode-tokens-token-name-alist' and
 `unicode-tokens-shortcut-alist'."
   (let ((unicode-tokens-quail-define-rules
 	 (list 'quail-define-rules)))
-    (let ((ulist (copy-list unicode-tokens-shortcut-alist))
+    (let ((ulist (copy-sequence unicode-tokens-shortcut-alist))
 	  ustring shortcut)
       (setq ulist (sort ulist 'unicode-tokens-map-ordering))
       (while ulist
@@ -713,7 +714,7 @@ Available annotations chosen from `unicode-tokens-control-regions'."
 			"Annotate region with: "
 			unicode-tokens-control-regions nil
 			'requirematch))))
-  (assert (assoc name unicode-tokens-control-regions))
+  (cl-assert (assoc name unicode-tokens-control-regions))
   (let* ((entry (assoc name unicode-tokens-control-regions))
 	 (beg   (region-beginning))
 	 (end   (region-end))
@@ -735,7 +736,7 @@ Available annotations chosen from `unicode-tokens-control-regions'."
 		      "Insert control symbol: "
 		      unicode-tokens-control-characters
 		      nil 'requirematch)))
-  (assert (assoc name unicode-tokens-control-characters))
+  (cl-assert (assoc name unicode-tokens-control-characters))
   (insert (format unicode-tokens-control-char-format
 		  (cadr (assoc name unicode-tokens-control-characters)))))
 
@@ -832,7 +833,8 @@ but multiple characters in the underlying buffer."
 	    (error "Cannot find token before point"))
 	  (when token
 	    (let* ((tokennumber
-		    (search (list token) unicode-tokens-token-list :test 'equal))
+		    (cl-search (list token) unicode-tokens-token-list
+                               :test #'equal))
 		   (numtoks
 		    (hash-table-count unicode-tokens-hash-table))
 		   (newtok
@@ -869,7 +871,7 @@ Starts from point."
 	 (regexp-opt (mapcar 'car unicode-tokens-shortcut-replacement-alist))))
     ;; override the display of the regexp because it's huge!
     ;; (doesn't help with C-h: need way to programmatically show string)
-    (cl-flet ((query-replace-descr (str) 
+    (cl-flet ((query-replace-descr (str)
 				(if (eq str shortcut-regexp) "shortcut" str)))
       (perform-replace shortcut-regexp
 		       (cons 'unicode-tokens-replace-shortcut-match nil)
@@ -883,7 +885,7 @@ Starts from point."
 	       (format unicode-tokens-token-format token)))))
 
 (defun unicode-tokens-replace-unicode ()
-  "Query-replace unicode sequences in the buffer with tokens having same appearance.
+  "Query-replace unicode seq. in the buffer with tokens having same appearance.
 Starts from point."
   (interactive)
   (let ((uchar-regexp unicode-tokens-uchar-regexp))
@@ -942,7 +944,7 @@ Starts from point."
 			     'face
 			     'header-line))
 	    (insert " "))
-	  (incf count)
+	  (cl-incf count)
 	  (if (null toks)
 	      (insert " ")
 	    (insert-text-button
@@ -972,7 +974,7 @@ Starts from point."
 (defalias 'unicode-tokens-list-unicode-chars 'unicode-chars-list-chars)
 
 (defun unicode-tokens-encode-in-temp-buffer (str fn)
-  "Call FN on encoded version of STR."
+  "Compute an encoded version of STR and call FN onto."
   (with-temp-buffer
     (insert str)
     (goto-char (point-min))

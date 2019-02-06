@@ -3,7 +3,7 @@
 ;; This file is part of Proof General.
 
 ;; Portions © Copyright 1994-2012  David Aspinall and University of Edinburgh
-;; Portions © Copyright 2003, 2012, 2014  Free Software Foundation, Inc.
+;; Portions © Copyright 2003-2018  Free Software Foundation, Inc.
 ;; Portions © Copyright 2001-2017  Pierre Courtieu
 ;; Portions © Copyright 2010, 2016  Erik Martin-Dorel
 ;; Portions © Copyright 2011-2013, 2016-2017  Hendrik Tews
@@ -25,6 +25,7 @@
 
 ;;; Code:
 
+(eval-when-compile (require 'cl-lib))
 (require 'proof-splash)
 (setq proof-splash-enable nil)		; prevent splash when testing
 
@@ -104,7 +105,7 @@
 				 (format-time-string "%D %H:%M")))))
 
 (defun pg-autotest-message (msg &rest args)
-  "Give message MSG in log file output and on display."
+  "Give message MSG (formatted using ARGS) in log file output and on display."
   (let ((fmsg   (if args (apply 'format msg args) msg)))
     (proof-with-current-buffer-if-exists
      pg-autotest-log
@@ -215,15 +216,15 @@ completely processing the buffer as the last step."
 	 " random jump: processing whole buffer")
 	(proof-process-buffer)
 	(proof-shell-wait)
-	(decf jumps))
+	(cl-decf jumps))
 
-	((and (eq random-thing 1) 
+	((and (eq random-thing 1)
 	      (not (proof-locked-region-empty-p)))
 	 (pg-autotest-message
 	  " random jump: retracting whole buffer")
 	 (proof-retract-buffer)
 	 (proof-shell-wait)
-	 (decf jumps))
+	 (cl-decf jumps))
 
 	(t
 	 (pg-autotest-message
@@ -241,7 +242,7 @@ completely processing the buffer as the last step."
 		    " random jump: interrupting prover")
 		   (proof-interrupt-process)))
 	     (proof-shell-wait))
-	   (decf jumps)))))
+	   (cl-decf jumps)))))
   (unless (proof-locked-region-full-p)
     (proof-process-buffer)
     (proof-shell-wait))
@@ -280,7 +281,7 @@ completely processing the buffer as the last step."
 (defun pg-autotest-test-quit-prover ()
   "Exit prover process."
   (if (buffer-live-p proof-shell-buffer)
-      (let ((kill-buffer-query-functions nil)) 
+      (let ((kill-buffer-query-functions nil))
 	(kill-buffer proof-shell-buffer))
     (error "No proof shell buffer to kill")))
 

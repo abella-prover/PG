@@ -3,7 +3,7 @@
 ;; This file is part of Proof General.
 
 ;; Portions © Copyright 1994-2012  David Aspinall and University of Edinburgh
-;; Portions © Copyright 2003, 2012, 2014  Free Software Foundation, Inc.
+;; Portions © Copyright 2003-2018  Free Software Foundation, Inc.
 ;; Portions © Copyright 2001-2017  Pierre Courtieu
 ;; Portions © Copyright 2010, 2016  Erik Martin-Dorel
 ;; Portions © Copyright 2011-2013, 2016-2017  Hendrik Tews
@@ -19,10 +19,10 @@
 ;;; Code:
 (eval-when-compile
   (require 'easymenu)			; easy-menu-add, etc
-  (require 'cl)				; incf
-  (require 'span)			; span-*
-  (defvar proof-goals-mode-menu)	; defined by macro below
-  (defvar proof-assistant-menu))	; defined by macro in proof-menu
+  (require 'span))			; span-*
+(require 'proof-script)                 ;For proof-insert-sendback-command
+(defvar proof-goals-mode-menu)          ; defined by macro below
+(defvar proof-assistant-menu)           ; defined by macro in proof-menu
 
 (require 'pg-assoc)
 
@@ -89,7 +89,7 @@ function tries to do that by calling `pg-response-maybe-erase'.
 
 If KEEPRESPONSE is non-nil, we assume that a response message
 corresponding to this goals message has already been displayed
-before this goals message (see `proof-shell-handle-delayed-output'),  
+before this goals message (see `proof-shell-handle-delayed-output'),
 so the response buffer should not be cleared."
   (save-excursion
     ;; Response buffer may be out of date. It may contain (error)

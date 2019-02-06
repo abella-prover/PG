@@ -3,7 +3,7 @@
 ;; This file is part of Proof General.
 
 ;; Portions © Copyright 1994-2012  David Aspinall and University of Edinburgh
-;; Portions © Copyright 2003, 2012, 2014  Free Software Foundation, Inc.
+;; Portions © Copyright 2003-2018  Free Software Foundation, Inc.
 ;; Portions © Copyright 2001-2017  Pierre Courtieu
 ;; Portions © Copyright 2010, 2016  Erik Martin-Dorel
 ;; Portions © Copyright 2011-2013, 2016-2017  Hendrik Tews
@@ -179,14 +179,14 @@ This is as a pair (POINT . CONTENTS)."
   (if (and
        bufhist-mode
        (memq 'bufhist-before-change-function before-change-functions))
-      (let ((before-change-functions nil)
-	    (after-change-functions nil))
+      (let ((inhibit-modification-hooks t))
 	(bufhist-before-change-function)))
   (erase-buffer)
   (bufhist-insert-buttons))
 
 (defun bufhist-checkpoint-and-erase ()
-  "Add buffer contents to history then erase. Only erase if not in bufhist mode"
+  "Add buffer contents to history then erase.
+Only erase if not in bufhist mode."
   (interactive)
   (bufhist-checkpoint)
   (bufhist-erase-buffer))
@@ -241,7 +241,8 @@ If optional NOSAVE is non-nil, do not try to save current contents."
   (bufhist-switch-to-index 0 nil 'browsing))
 
 (defun bufhist-prev (&optional n)
-  "Browse backward in the history of buffer contents."
+  "Browse backward in the history of buffer contents.
+If N is omitted or nil, move backward by one item."
   (interactive "p")
   (bufhist-switch-to-index
    (mod (+ bufhist-ring-pos (or n 1))
@@ -249,7 +250,8 @@ If optional NOSAVE is non-nil, do not try to save current contents."
    nil 'browsing))
 
 (defun bufhist-next (&optional n)
-  "Browse forward in the history of buffer contents."
+  "Browse forward in the history of buffer contents.
+If N is omitted or nil, move forward by one item."
   (interactive "p")
   (bufhist-prev (- (or n 1))))
 
@@ -284,7 +286,7 @@ If optional NOSAVE is non-nil, do not try to save current contents."
   "Initialise a ring history for the current buffer.
 The history will be read-only unless READWRITE is non-nil.
 For read-only histories, edits to the buffer switch to the latest version.
-The size defaults to `bufhist-ring-size'."
+If RINGSIZE is omitted or nil, the size defaults to ‘bufhist-ring-size’."
   (interactive)
   (setq bufhist-ring (make-ring (or ringsize bufhist-ring-size)))
   (setq bufhist-normal-read-only buffer-read-only)
@@ -370,3 +372,4 @@ The size defaults to `bufhist-ring-size'."
 	(setq bufhist-top-point (point))))))
 
 (provide 'bufhist)
+;;; bufhist.el ends here

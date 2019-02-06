@@ -3,7 +3,7 @@
 ;; This file is part of Proof General.
 
 ;; Portions © Copyright 1994-2012  David Aspinall and University of Edinburgh
-;; Portions © Copyright 2003, 2012, 2014  Free Software Foundation, Inc.
+;; Portions © Copyright 2003-2018  Free Software Foundation, Inc.
 ;; Portions © Copyright 2001-2017  Pierre Courtieu
 ;; Portions © Copyright 2010, 2016  Erik Martin-Dorel
 ;; Portions © Copyright 2011-2013, 2016-2017  Hendrik Tews
@@ -23,6 +23,7 @@
 
 ;;; Code:
 
+(eval-when-compile (require 'cl-lib))
 ;;
 ;; Give Emacs version mismatch error here.
 ;;
@@ -40,7 +41,7 @@
 
 (if (or (not (boundp 'emacs-major-version))
 	(< emacs-major-version 23)
-	(string-match "XEmacs" emacs-version))
+	(featurep 'xemacs))
     (error "Proof General is not compatible with Emacs %s" emacs-version))
 
 (unless (equal pg-compiled-for (pg-emacs-version-cookie))
@@ -51,7 +52,6 @@
 
 
 (require 'proof-site)			; basic vars
-(require 'proof-compat)		        ; compatibility
 (require 'pg-pamacs)			; macros for pa config
 (require 'proof-config)			; config vars
 (require 'bufhist)			; bufhist
@@ -59,14 +59,12 @@
 (require 'proof-autoloads)		; interface fns
 (require 'scomint)			; for proof-shell-live-buffer
 
-;;; Code:
-
 ;;
 ;; Handy macros
 ;;
 
 (defmacro proof-with-current-buffer-if-exists (buf &rest body)
-  "As with-current-buffer if BUF exists and is live, otherwise nothing."
+  "Like ‘with-current-buffer’ if BUF exists and is live, otherwise nothing."
   `(if (buffer-live-p ,buf)
        (with-current-buffer ,buf
 	 ,@body)))
@@ -75,8 +73,9 @@
 ;; which work from different PG buffers (goals, response), typically
 ;; bound to toolbar commands.
 (defmacro proof-with-script-buffer (&rest body)
-  "Execute BODY in some script buffer: current buf or otherwise proof-script-buffer.
+  "Execute BODY in some script buffer: current buf, else ‘proof-script-buffer’.
 Return nil if not a script buffer or if no active scripting buffer."
+  (declare (debug t))
   `(cond
     ((eq proof-buffer-type 'script)
      (progn
@@ -86,7 +85,7 @@ Return nil if not a script buffer or if no active scripting buffer."
        ,@body))))
 
 (defmacro proof-map-buffers (buflist &rest body)
-  "Do BODY on each buffer in BUFLIST, if it exists."
+  "Eval BODY on each buffer in BUFLIST, if it exists."
   `(dolist (buf ,buflist)
      (proof-with-current-buffer-if-exists buf ,@body)))
 
@@ -187,9 +186,9 @@ user accidently killing an associated buffer."
 ;; Key functions
 
 (defun proof-define-keys (map kbl)
-  "Adds keybindings KBL in MAP.
-The argument KBL is a list of tuples (k . f) where `k' is a keybinding
-\(vector) and `f' the designated function."
+  "Add in MAP the keybindings KBL.
+The argument KBL is a list of tuples (K . F) where K is a keybinding
+\(vector) and F the designated function."
   (mapcar
    (lambda (kbl)
      (let ((k (car kbl)) (f (cdr kbl)))
@@ -230,25 +229,26 @@ Leave point at END."
 (defvar proof-advertise-layout-freq 30
   "Frequency for PG messages to be displayed from time to time.")
 (defvar proof-advertise-layout-count proof-advertise-layout-freq
-  "counter used to display PG messages from time to time.")
+  "Counter used to display PG messages from time to time.")
 
 (defun proof-get-window-for-buffer (buffer)
   "Find a window for BUFFER, display it there, return the window.
-NB: may change the selected window. This function is a wrapper on
-display-buffer. The idea is that if the user has opened and
+NB: may change the selected window.  This function is a wrapper on
+‘display-buffer’.  The idea is that if the user has opened and
 closed some windows we want to preserve the layout by only
-switching buffer in already pg-associate windows. So if the
+switching buffer in already pg-associate windows.  So if the
 buffer is not already displayed, we try to reuse an existing
-associated window, even if in 3-win mode. If no such window
-exists, we fall back to display-buffer while protecting script
+associated window, even if in 3-win mode.  If no such window
+exists, we fall back to ‘display-buffer’ while protecting script
 buffer to be hidden or split.
 
 Experimentally we display a message from time to time advertising
-C-c C-l."
+\\[proof-layout-windows]."
   ;; IF there *isn't* a visible window showing buffer...
   (unless (get-buffer-window buffer 0)
     (if proof-three-window-enable
-        (if (< proof-advertise-layout-count 30) (incf proof-advertise-layout-count)
+        (if (< proof-advertise-layout-count 30)
+            (cl-incf proof-advertise-layout-count)
           (message (substitute-command-keys "Hit \\[proof-layout-windows] to reset layout"))
           (setq proof-advertise-layout-count 0)))
     ;; THEN either we are in 2 wins mode and we must switch the assoc
@@ -311,19 +311,10 @@ Ensure that point is visible in window."
 	      ;; inside shrink to fit, for some reason
 	      (when (window-live-p window)
 		(unless (pos-visible-in-window-p (point) window)
-		  (recenter -1))
-		(with-current-buffer buffer
-		  (if (window-bottom-p window)
-		      (unless (local-variable-p 'mode-line-format)
-			;; Don't show any mode line.
-			(set (make-local-variable 'mode-line-format) nil))
-		    (unless mode-line-format
-		      ;; If the buffer gets displayed elsewhere, re-add
-		      ;; the modeline.
-		      (kill-local-variable 'mode-line-format))))))))))))
+		  (recenter -1))))))))))
 
 (defun proof-clean-buffer (buffer)
-  "Erase buffer and hide from display if proof-delete-empty-windows set.
+  "Erase BUFFER and hide from display if ‘proof-delete-empty-windows’ set.
 Auto deletion only affects selected frame.  (We assume that the selected
 frame is the one showing the script buffer.)
 No effect if buffer is dead."
@@ -408,8 +399,9 @@ or if the window is the only window of its frame."
 		(select-window window))))
        ;; the window is the full width, right?
        ;; [if not, we may be in horiz-split scheme, problematic]
-       (not (window-leftmost-p window))
-       (not (window-rightmost-p window)))
+       (not (zerop (car (window-edges window)))) ;not leftmost
+       (not (>= (nth 2 (window-edges window))    ;not rightmost
+	        (frame-width (window-frame window)))))
       ;; OK, we're not going to adjust the height here.  Moreover,
       ;; we'll make sure the height can be changed elsewhere.
       (setq window-size-fixed nil)
@@ -598,25 +590,23 @@ The name of the defined function is returned."
   `(proof-deffloatset-fn (quote ,var) (quote ,othername)))
 
 (defun proof-defstringset-fn (var &optional othername)
-  "Define a function <VAR>-toggle for setting an integer customize setting VAR.
-Args as for the macro `proof-defstringset', except will be evaluated."
+  "Define a function OTHERNAME for setting an string customize setting VAR.
+OTHERNAME defaults to `VAR-stringset'."
   (eval
-   `(defun ,(if othername othername
-	      (intern (concat (symbol-name var) "-stringset"))) (arg)
-	      ,(concat "Set `" (symbol-name var) "' to ARG.
-This function simply uses customize-set-variable to set the variable.
+   `(defun ,(or othername
+	        (intern (concat (symbol-name var) "-stringset")))
+        (arg)
+      ,(concat "Set `" (symbol-name var) "' to ARG.
+This function simply uses `customize-set-variable' to set the variable.
 It was constructed with `proof-defstringset-fn'.")
-	      (interactive ,(format "sValue for %s (a string): "
-				    (symbol-name var)))
-	      (customize-set-variable (quote ,var) arg))))
-
-(defmacro proof-defstringset (var &optional othername)
-  "The setting function uses customize-set-variable to change the variable.
-OTHERNAME gives an alternative name than the default <VAR>-stringset.
-The name of the defined function is returned."
-  `(proof-defstringset-fn (quote ,var) (quote ,othername)))
-
-
+      (interactive (list
+		    (read-string
+		     (format "Value for %s (default %s): "
+			     (symbol-name (quote ,var))
+			     (symbol-value (quote ,var)))
+                     nil nil
+		     (symbol-value (quote ,var)))))
+      (customize-set-variable (quote ,var) arg))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;
@@ -699,9 +689,10 @@ KEY is added onto proof assistant map."
 ;;
 
 (defun proof-locate-executable (progname &optional returnnopath extrapath)
-  "Search for PROGNAME on environment PATH.  Return the full path to PROGNAME, or nil.
+  "Search for PROGNAME on environment PATH.
+Return the full path to PROGNAME, or nil.
 If RETURNNOPATH is non-nil, return PROGNAME even if we can't find a full path.
-EXTRAPATH is a list of extra path components"
+EXTRAPATH is a list of extra path components."
   (or
    (let ((exec-path (append exec-path extrapath)))
      (executable-find progname))

@@ -1,9 +1,9 @@
-;;; coq-autotest.el --- tests of Coq Proof General (in progress).
+;;; coq-autotest.el --- tests of Coq Proof General (in progress)  -*- lexical-binding:t -*-
 
 ;; This file is part of Proof General.
 
 ;; Portions © Copyright 1994-2012  David Aspinall and University of Edinburgh
-;; Portions © Copyright 2003, 2012, 2014  Free Software Foundation, Inc.
+;; Portions © Copyright 2003-2018  Free Software Foundation, Inc.
 ;; Portions © Copyright 2001-2017  Pierre Courtieu
 ;; Portions © Copyright 2010, 2016  Erik Martin-Dorel
 ;; Portions © Copyright 2011-2013, 2016-2017  Hendrik Tews
@@ -16,15 +16,14 @@
 
 ;;; Code:
 
-(eval-when-compile
-  (require 'cl))
-
 (require 'pg-autotest)
 
 (require 'proof-site)
 (defvar coq-compile-before-require)
 
-(unless (bound-and-true-p byte-compile-current-file)
+;;;###autoload
+(defun coq-autotest ()
+  (interactive)
 
   (pg-autotest start 'debug)
 
@@ -97,3 +96,7 @@
   (pg-autotest timetaken 'total)
 
   (pg-autotest exit))
+
+(provide 'coq-autotest)
+
+;;; coq-autotest.el ends here

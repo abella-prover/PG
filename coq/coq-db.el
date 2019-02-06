@@ -1,9 +1,9 @@
-;;; coq-db.el --- coq keywords database utility functions -*- coding: utf-8; -*-
+;;; coq-db.el --- coq keywords database utility functions -*- coding: utf-8; lexical-binding:t -*-
 
 ;; This file is part of Proof General.
 
 ;; Portions © Copyright 1994-2012  David Aspinall and University of Edinburgh
-;; Portions © Copyright 2003, 2012, 2014  Free Software Foundation, Inc.
+;; Portions © Copyright 2003-2018  Free Software Foundation, Inc.
 ;; Portions © Copyright 2001-2017  Pierre Courtieu
 ;; Portions © Copyright 2010, 2016  Erik Martin-Dorel
 ;; Portions © Copyright 2011-2013, 2016-2017  Hendrik Tews
@@ -23,11 +23,8 @@
 
 ;;; Code:
 
-(eval-when-compile
-  (require 'cl))
+(eval-when-compile (require 'cl-lib))   ;decf
 
-(require 'proof-config)			; for proof-face-specs, a macro
-(require 'proof-syntax)			; for proof-ids-to-regexp
 (require 'holes)
 
 (defconst coq-syntax-db nil
@@ -78,10 +75,10 @@ new keyword to colorize.")
 
 (defun coq-insert-from-db (db prompt &optional alwaysjump)
   "Ask for a keyword, with completion on keyword database DB and insert.
-Insert corresponding string with holes at point. If an insertion
-function is present for the keyword, call it instead. see
-`coq-syntax-db' for DB structure. If ALWAYSJUMP is non nil, jump
-to the first hole even if more than one."
+Insert corresponding string with holes at point.  If an insertion
+function is present for the keyword, call it instead. See
+`coq-syntax-db' for DB structure.  If ALWAYSJUMP is non nil, jump to
+the first hole even if more than one."
   (let* ((tac (completing-read (concat prompt " (TAB for completion): ")
 			       db nil nil))
 	 (infos (cddr (assoc tac db)))
@@ -95,8 +92,8 @@ to the first hole even if more than one."
 
 
 
-(defun coq-build-command-from-db (db prompt &optional preformatquery)
-  "Ask for a keyword, with completion on keyword database DB and send to coq.
+(defun coq-build-command-from-db (db prompt &optional _preformatquery)
+  "Ask for a keyword, with completion on keyword database DB and send to Coq.
 See `coq-syntax-db' for DB structure."
   ;; Next invocation of minibuffer (read-string below) will first recursively
   ;; ask for a command in db and expand it with holes. This way the cursor will
@@ -142,7 +139,7 @@ regexp.  See `coq-syntax-db' for DB structure."
 ;	     (color (concat "\\_<" (nth 4 hd) "\\_>")))       ; colorization string
 	;; TODO delete doublons
 	(when (and color (or (not filter) (funcall filter hd)))
-	  (setq res 
+	  (setq res
 		(nconc res (list
 			    (concat "\\_<" color "\\_>")))))
 	(setq l tl)))
@@ -163,7 +160,7 @@ regexp.  See `coq-syntax-db' for DB structure."
 	(setq l tl)))
 ; da: next call is wrong?
 ;    (proof-ids-to-regexp res)))
-    (concat "\\_<\\(?:" (proof-regexp-alt-list res) "\\)\\_>")))
+    (concat "\\_<\\(?:" (mapconcat #'identity res "\\|") "\\)\\_>")))
 
 
 ;; Computes the max length of strings in a list
@@ -188,12 +185,12 @@ Used by `coq-build-menu-from-db', which you should probably use instead.  See
   (let ((l db) (res ()) (size lgth)
 	(keybind-abbrev (substitute-command-keys " \\[expand-abbrev]")))
     (while (and l (> size 0))
-      (let* ((hd (car l))
+      (let* ((hd (pop l))
 	     (menu     	 (nth 0 hd)) ; e1 = menu entry
 	     (abbrev   	 (nth 1 hd)) ; e2 = abbreviation
 	     (complt   	 (nth 2 hd)) ; e3 = completion
-	     (state    	 (nth 3 hd)) ; e4 = state changing
-	     (color    	 (nth 4 hd)) ; e5 = colorization string
+	     ;; (state   (nth 3 hd)) ; e4 = state changing
+	     ;; (color   (nth 4 hd)) ; e5 = colorization string
 	     (insertfn 	 (nth 5 hd)) ; e6 = function for smart insertion
 	     (menuhide 	 (nth 6 hd)) ; e7 = if non-nil : hide in menu
 	     (entry-with (max (- menuwidth (length menu)) 0))
@@ -204,16 +201,15 @@ Used by `coq-build-menu-from-db', which you should probably use instead.  See
 	  (let ((menu-entry
 		 (vector
 		  ;; menu entry label
-		  (concat menu 
-			  (if (not abbrev) "" 
+		  (concat menu
+			  (if (not abbrev) ""
 			    (concat spaces "(" abbrev keybind-abbrev ")")))
 		  ;;insertion function if present otherwise insert completion
 		  (if insertfn insertfn `(holes-insert-and-expand ,complt))
 		  t)))
-	    (setq res (nconc res (list menu-entry)))));; append *in place*
-	(setq l (cdr l))
-	(decf size)))
-    res))
+	    (push menu-entry res)))
+	(cl-decf size)))
+    (nreverse res)))
 
 
 (defun coq-build-title-menu (db size)
@@ -254,8 +250,7 @@ structure."
     res))
 
 (defcustom coq-holes-minor-mode t
-  "*Whether to apply holes minor mode (see `holes-show-doc') in
-  coq mode."
+  "*Whether to apply holes minor mode (see `holes-show-doc') in coq mode."
   :type 'boolean
   :group 'coq)
 
@@ -265,9 +260,9 @@ See `coq-syntax-db' for DB structure."
   (let ((l db) (res ()))
     (while l
       (let* ((hd (car l))(tl (cdr l))	; hd is a list of length 3 or 4
-	     (e1 (car hd)) (tl1 (cdr hd)) ; e1 = menu entry
+	     (_e1 (car hd)) (tl1 (cdr hd)) ; e1 = menu entry
 	     (e2 (car tl1)) (tl2 (cdr tl1)) ; e2 = abbreviation
-	     (e3 (car tl2)) (tl3 (cdr tl2)) ; e3 = completion
+	     (e3 (car tl2)) (_tl3 (cdr tl2)) ; e3 = completion
 	     )
 	;; careful: nconc destructive!
 	(when e2
@@ -291,14 +286,13 @@ See `coq-syntax-db' for DB structure."
 
 ;;A new face for tactics which fail when they don't kill the current goal
 (defface coq-solve-tactics-face
-  (proof-face-specs
-   (:foreground "red") ; pour les fonds clairs
-   (:foreground "red1") ; pour les fonds foncés
-   ()) ; pour le noir et blanc
+  `((((background light)) :foreground "red")
+    (((background dark)) :foreground "red1")
+    ()) ; pour le noir et blanc
   "Face for names of closing tactics in proof scripts."
   :group 'proof-faces)
 
-;;A face for cheating tactics 
+;;A face for cheating tactics
 ;; We use :box in addition to :background because box remains visible in
 ;; locked-region. :reverse-video is another solution.
 (defface coq-cheat-face
@@ -328,6 +322,28 @@ See `coq-syntax-db' for DB structure."
 (defface coq-context-qualifier-face
   '((t :inherit font-lock-preprocessor-face :weight bold))
   "Face used for `ltac:', `constr:', and `uconstr:' headers."
+  :group 'proof-faces)
+
+;; This messes columns, can't figure out why putting this face makes the overlay
+;; larger than a character
+;; (defface coq-button-face
+;;   '((t :inherit custom-button :background "dark gray"))
+;;   ""
+;;   :group 'proof-faces)
+
+;; (defface coq-button-face-pressed
+;;   '((t :inherit custom-button-pressed :background "light gray"))
+;;   ""
+;;   :group 'proof-faces)
+
+(defface coq-button-face
+  '((t . (:background "light gray")))
+  ""
+  :group 'proof-faces)
+
+(defface coq-button-face-pressed
+  '((t . (:background "dark gray")))
+  ""
   :group 'proof-faces)
 
 (defconst coq-solve-tactics-face 'coq-solve-tactics-face

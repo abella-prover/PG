@@ -1,9 +1,9 @@
-;;; pg-xml.el --- XML functions for Proof General
+;;; pg-xml.el --- XML functions for Proof General  -*- lexical-binding:t -*-
 
 ;; This file is part of Proof General.
 
 ;; Portions © Copyright 1994-2012  David Aspinall and University of Edinburgh
-;; Portions © Copyright 2003, 2012, 2014  Free Software Foundation, Inc.
+;; Portions © Copyright 2003-2018  Free Software Foundation, Inc.
 ;; Portions © Copyright 2001-2017  Pierre Courtieu
 ;; Portions © Copyright 2010, 2016  Erik Martin-Dorel
 ;; Portions © Copyright 2011-2013, 2016-2017  Hendrik Tews
@@ -20,8 +20,7 @@
 
 ;;; Code:
 
-(require 'cl)
-
+(require 'cl-lib)                       ;cl-mapcan
 (require 'xml)
 
 (require 'proof-utils) ;; for pg-internal-warning
@@ -61,6 +60,7 @@
 
 (defun pg-xml-parse-buffer (&optional buffer nomsg start end)
   "Parse an XML documment in BUFFER (defaulting to current buffer).
+Display progress message unless NOMSG is non-nil.
 Parsing according to `xml-parse-file' of xml.el.
 Optional START and END bound the parse."
   (unless nomsg
@@ -83,13 +83,13 @@ Optional START and END bound the parse."
     (or val
 	(if optional
 	    defaultval
-	  (pg-xml-error "pg-xml-get-attr: Didn't find required %s attribute in %s element"
+	  (pg-xml-error "Function pg-xml-get-attr: Didn't find required %s attribute in %s element"
 		 attribute (xml-node-name node))))))
 
 (defun pg-xml-child-elts (node)
   "Return list of *element* children of NODE (ignoring strings)."
   (let ((children (xml-node-children node)))
-    (mapcan (lambda (x) (if (listp x) (list x))) children)))
+    (cl-mapcan (lambda (x) (if (listp x) (list x))) children)))
 
 (defun pg-xml-child-elt (node)
   "Return unique element child of NODE."
@@ -100,7 +100,7 @@ Optional START and END bound the parse."
 			    (xml-node-name node)))))
 
 (defun pg-xml-get-child (child node)
-  "Return single element CHILD of node, give error if more than one."
+  "Return single element CHILD of NODE, give error if more than one."
   (let ((children (xml-get-children node child)))
     (if (> (length children) 1)
 	 (progn
@@ -133,16 +133,17 @@ Optional START and END bound the parse."
   "Convert the XML trees in XMLS into a string (without additional indentation)."
   (let* (strs
 	 (insertfn    (lambda (&rest args)
-			(setq strs (cons (reduce 'concat args) strs)))))
+			(push (mapconcat #'identity args "") strs))))
     (dolist (xml xmls)
       (pg-xml-output-internal xml nil insertfn))
-    (reduce 'concat (reverse strs))))
+    (mapconcat #'identity (reverse strs) "")))
 
 ;; based on xml-debug-print from xml.el
 
 (defun pg-xml-output-internal (xml indent-string outputfn)
-  "Outputs the XML tree using OUTPUTFN, which should accept a list of args.
-Output with indentation INDENT-STRING (or none if nil)."
+  "Output the XML tree.
+Use indentation INDENT-STRING (or none if nil).
+Cal OUTPUTFN, which should accept a list of args."
   (let ((tree xml)
 	attlist)
     (funcall outputfn (or indent-string "") "<" (symbol-name (xml-node-name tree)))
@@ -167,7 +168,7 @@ Output with indentation INDENT-STRING (or none if nil)."
 	      (pg-xml-output-internal node (if indent-string (concat indent-string "  ")) outputfn))
 	     ((stringp node) (funcall outputfn node))
 	     (t
-	      (error "pg-xml-output-internal: Invalid XML tree"))))
+	      (error "Function pg-xml-output-internal: Invalid XML tree"))))
 
 	  (funcall outputfn (if indent-string (concat "\n" indent-string) "")
 		   "</" (symbol-name (xml-node-name xml)) ">"))
@@ -185,7 +186,7 @@ Output with indentation INDENT-STRING (or none if nil)."
 (defsubst pg-pgip-get-area (node &optional optional defaultval)
   (pg-xml-get-attr 'area node optional defaultval))
 
-(defun pg-pgip-get-icon (node &optional optional defaultval)
+(defun pg-pgip-get-icon (node &optional _optional _defaultval)
   "Return the <icon> child of NODE, or nil if none."
   (pg-xml-get-child 'icon node))
 

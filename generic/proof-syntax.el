@@ -3,7 +3,7 @@
 ;; This file is part of Proof General.
 
 ;; Portions © Copyright 1994-2012  David Aspinall and University of Edinburgh
-;; Portions © Copyright 2003, 2012, 2014  Free Software Foundation, Inc.
+;; Portions © Copyright 2003-2018  Free Software Foundation, Inc.
 ;; Portions © Copyright 2001-2017  Pierre Courtieu
 ;; Portions © Copyright 2010, 2016  Erik Martin-Dorel
 ;; Portions © Copyright 2011-2013, 2016-2017  Hendrik Tews
@@ -20,15 +20,14 @@
 ;;; Code:
 (require 'font-lock)
 (require 'proof-config)			; proof-case-fold-search
-(require 'proof-compat)			; proof-buffer-syntactic-context
 (require 'pg-pamacs)			; proof-ass-sym
 
 (defsubst proof-ids-to-regexp (l)
   "Maps a non-empty list of tokens L to a regexp matching any element.
 Uses a regexp of the form \\_<...\\_>."
-  (concat "\\_<\\(?:"
+  (concat "\\_<"
 	  (regexp-opt l) ; was: (mapconcat 'identity l "\\|")
-	  "\\)\\_>"))
+	  "\\_>"))
 
 (defsubst proof-anchor-regexp (e)
   "Anchor (\\`) and group the regexp E."
@@ -37,18 +36,14 @@ Uses a regexp of the form \\_<...\\_>."
 (defconst proof-no-regexp "\\<\\>"
   "A regular expression that never matches anything.")
 
+(defsubst proof-regexp-alt-list (args)
+  "Return the regexp which matches any of the regexps ARGS."
+  (mapconcat #'identity args "\\|"))
+
 (defsubst proof-regexp-alt (&rest args)
   "Return the regexp which matches any of the regexps ARGS."
   ;; see regexp-opt (NB: but that is for strings, not regexps)
-  (let ((res ""))
-    (dolist (regexp args)
-      (setq res (concat res (if (string-equal res "") "\\(?:" "\\|\\(?:")
-			regexp "\\)")))
-    res))
-
-(defsubst proof-regexp-alt-list (args)
-  "Return the regexp which matches any of the regexps ARGS."
-  (apply 'proof-regexp-alt args))
+  (proof-regexp-alt-list args))
 
 (defsubst proof-re-search-forward-region (startre endre)
   "Search for a region delimited by regexps STARTRE and ENDRE.
@@ -64,56 +59,56 @@ nil if a region cannot be found."
 ;; applicable.
 
 (defsubst proof-search-forward (string &optional bound noerror count)
-  "Like search-forward, but set case-fold-search to proof-case-fold-search."
+  "Like ‘search-forward’, but set ‘case-fold-search’ to ‘proof-case-fold-search’."
   (let
       ((case-fold-search proof-case-fold-search))
     (search-forward string bound noerror count)))
 
 ;;;###autoload
-(defsubst proof-replace-regexp-in-string (regexp rep string)
-  "Like replace-regexp-in-string, but set case-fold-search to proof-case-fold-search."
+(defun proof-replace-regexp-in-string (regexp rep string)
+  "Like ‘replace-regexp-in-string’, but set ‘case-fold-search’ to ‘proof-case-fold-search’."
   (let ((case-fold-search proof-case-fold-search))
     (replace-regexp-in-string regexp rep string)))
 
 (defsubst proof-re-search-forward (regexp &optional bound noerror count)
-  "Like re-search-forward, but set case-fold-search to proof-case-fold-search."
+  "Like ‘re-search-forward’, but set ‘case-fold-search’ to ‘proof-case-fold-search’."
   (let ((case-fold-search proof-case-fold-search))
     (re-search-forward regexp bound noerror count)))
 
 (defsubst proof-re-search-backward (regexp &optional bound noerror count)
-  "Like re-search-backward, but set case-fold-search to proof-case-fold-search."
+  "Like ‘re-search-backward’, but set ‘case-fold-search’ to ‘proof-case-fold-search’."
   (let ((case-fold-search proof-case-fold-search))
     (re-search-backward regexp bound noerror count)))
 
 (defsubst proof-re-search-forward-safe (regexp &optional bound noerror count)
-  "Like re-search-forward, but set case-fold-search to proof-case-fold-search."
+  "Like ‘re-search-forward’, but set ‘case-fold-search’ to ‘proof-case-fold-search’."
   (and regexp
        (let ((case-fold-search proof-case-fold-search))
 	 (re-search-forward regexp bound noerror count))))
 
 (defsubst proof-string-match (regexp string &optional start)
-  "Like string-match, but set case-fold-search to proof-case-fold-search."
+  "Like ‘string-match’, but set ‘case-fold-search’ to ‘proof-case-fold-search’."
   (let ((case-fold-search proof-case-fold-search))
     (string-match regexp string start)))
 
 (defsubst proof-string-match-safe (regexp string &optional start)
-  "Like `string-match', but return nil if REGEXP or STRING is nil."
+  "Like ‘string-match’, but return nil if REGEXP or STRING is nil."
   (if (and regexp string) (proof-string-match regexp string start)))
 
 (defsubst proof-stringfn-match (regexp-or-fn string)
-  "Like proof-string-match if first arg is regexp, otherwise call it."
+  "Like ‘proof-string-match’ if first arg is regexp, otherwise call it."
   (cond ((stringp regexp-or-fn)
 	 (proof-string-match regexp-or-fn string))
 	((functionp regexp-or-fn)
 	 (funcall regexp-or-fn string))))
 
 (defsubst proof-looking-at (regexp)
-  "Like looking-at, but set case-fold-search to proof-case-fold-search."
+  "Like ‘looking-at’, but set ‘case-fold-search’ to ‘proof-case-fold-search’."
   (let ((case-fold-search proof-case-fold-search))
     (looking-at regexp)))
 
 (defsubst proof-looking-at-safe (regexp)
-  "Like `proof-looking-at', but return nil if REGEXP is nil."
+  "Like ‘proof-looking-at’, but return nil if REGEXP is nil."
   (if regexp (proof-looking-at regexp)))
 
 ;;
@@ -202,13 +197,6 @@ it calls `proof-looking-at-syntactic-context'."
 ;; For font-lock, we treat ,-separated identifiers as one identifier
 ;; and refontify commata using \{proof-zap-commas}.
 
-(defsubst proof-ids (proof-id &optional sepregexp)
-  "Generate a regular expression for separated lists of identifiers.
-Default is comma separated, or SEPREGEXP if set."
-  (concat proof-id "\\(\\s-*"   (or sepregexp ",") "\\s-*"
-	  proof-id "\\)*"))
-
-
 (defun proof-zap-commas (limit)
   "Remove the face of all `,' from point to LIMIT.
 Meant to be used from `font-lock-keywords' as a way
@@ -233,17 +221,15 @@ this were even more bogus...."
 ;; fontification function.
 ;;
 
-(eval-after-load "font-lock"
-'(progn
-(defadvice font-lock-fontify-keywords-region
-  (before font-lock-fontify-keywords-advice (beg end &optional loudly))
-  "Call proof assistant specific syntactic region fontify.
-If it's bound, we call <PA>-font-lock-fontify-syntactically-region."
-  (when (and proof-buffer-type
-	     (fboundp (proof-ass-sym font-lock-fontify-syntactically-region)))
-    (funcall (proof-ass-sym font-lock-fontify-syntactically-region)
-	     beg end loudly)))
-(ad-activate 'font-lock-fontify-keywords-region)))
+;; (defadvice font-lock-fontify-keywords-region
+;;   (before font-lock-fontify-keywords-advice (beg end &optional loudly))
+;;   "Call proof assistant specific syntactic region fontify.
+;; If it's bound, we call <PA>-font-lock-fontify-syntactically-region."
+;;   (when (and proof-buffer-type
+;; 	     (fboundp (proof-ass-sym font-lock-fontify-syntactically-region)))
+;;     (funcall (proof-ass-sym font-lock-fontify-syntactically-region)
+;; 	     beg end loudly)))
+;; (ad-activate 'font-lock-fontify-keywords-region)
 
 ;;
 ;; Functions for doing something like "format" but with customizable

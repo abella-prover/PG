@@ -1,9 +1,9 @@
-;;; pg-user.el --- User level commands for Proof General
+;;; pg-user.el --- User level commands for Proof General  -*- lexical-binding:t -*-
 
 ;; This file is part of Proof General.
 
 ;; Portions © Copyright 1994-2012  David Aspinall and University of Edinburgh
-;; Portions © Copyright 2003, 2012, 2014  Free Software Foundation, Inc.
+;; Portions © Copyright 2003-2019  Free Software Foundation, Inc.
 ;; Portions © Copyright 2001-2017  Pierre Courtieu
 ;; Portions © Copyright 2010, 2016  Erik Martin-Dorel
 ;; Portions © Copyright 2011-2013, 2016-2017  Hendrik Tews
@@ -26,13 +26,11 @@
 
 (require 'proof-script)	        ; we build on proof-script
 
-(require 'cl)
-(eval-when-compile
-  (require 'completion))                ; Loaded dynamically at runtime.
+(eval-when-compile (require 'cl-lib))   ;cl-decf
 (defvar which-func-modes)               ; Defined by which-func.
 
-(declare-function proof-segment-up-to "proof-script") 
-(declare-function proof-interrupt-process "proof-shell") 
+(declare-function proof-segment-up-to "proof-script")
+(declare-function proof-interrupt-process "proof-shell")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -46,12 +44,12 @@
 ;;;###autoload
 (defun proof-script-new-command-advance ()
   "Move point to a nice position for a new command, possibly inserting spaces.
-Assumes that point is at the end of a command.  
+Assumes that point is at the end of a command.
 No effect if `proof-next-command-insert-space' is nil."
   (interactive)
   (when proof-next-command-insert-space
     (let (sps)
-      (if (and (proof-next-command-new-line) 
+      (if (and (proof-next-command-new-line)
 	       (setq sps (skip-chars-forward " \t"))
 	       ;; don't break existing lines
 	       (eolp))
@@ -93,7 +91,7 @@ Assumes script buffer is current."
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-;; Further movement commands 
+;; Further movement commands
 ;;
 
 (defun proof-goto-command-start ()
@@ -135,7 +133,8 @@ Assumes script buffer is current."
 		(backward-char))))))))
 
 (defun proof-forward-command (&optional num)
-  "Move forward to the start of the next proof region."
+  "Move forward to the start of the next proof region.
+If called interactively, NUM is given by the prefix argument."
   (interactive "p")
   (skip-chars-forward " \t\n")
   (let* ((span  (or (span-at (point) 'type)
@@ -387,7 +386,7 @@ a proof command."
 
 ;;;###autoload
 (defmacro proof-define-assistant-command (fn doc cmdvar &optional body)
-  "Define FN (docstring DOC) to send BODY to prover, based on CMDVAR.
+  "Define FN (docstring DOC): check if CMDVAR is set, then send BODY to prover.
 BODY defaults to CMDVAR, a variable."
   `(defun ,fn ()
      ,(concat doc
@@ -400,7 +399,8 @@ BODY defaults to CMDVAR, a variable."
 
 ;;;###autoload
 (defmacro proof-define-assistant-command-witharg (fn doc cmdvar prompt &rest body)
-  "Define command FN to prompt for string CMDVAR to proof assistant.
+  "Define FN (arg) with DOC: check CMDVAR is set, PROMPT a string and eval BODY.
+The BODY can contain occurrences of arg.
 CMDVAR is a variable holding a function or string.  Automatically has history."
   `(progn
      (defvar ,(intern (concat (symbol-name fn) "-history")) nil
@@ -482,14 +482,14 @@ This is intended as a value for `proof-activate-scripting-hook'"
  "Write a goal command in the script, prompting for the goal."
  proof-goal-command
  "Goal" ; Goals always start at a new line
- (let ((proof-next-command-on-new-line t)) 
+ (let ((proof-next-command-on-new-line t))
    (proof-issue-new-command arg)))
 
 (proof-define-assistant-command-witharg proof-issue-save
  "Write a save/qed command in the script, prompting for the theorem name."
  proof-save-command
  "Save as" ; Saves always start at a new line
- (let ((proof-next-command-on-new-line t)) 
+ (let ((proof-next-command-on-new-line t))
    (proof-issue-new-command arg)))
 
 
@@ -524,13 +524,13 @@ It can also be used as a minor mode function: with ARG, turn on iff ARG>0"
 (defun proof-electric-terminator (&optional count)
   "Insert terminator char, maybe sending the command to the assistant.
 If we are inside a comment or string, insert the terminator.
-Otherwise, if the variable `proof-electric-terminator-enable' 
+Otherwise, if the variable `proof-electric-terminator-enable'
 is non-nil, the command will be sent to the assistant.
 
-To side-step the electric action and possibly insert multiple 
-characters, use a numeric prefix arg, like M-3 <terminator>."
+To side-step the electric action and possibly insert multiple characters,
+pass a non-nil COUNT arg, e.g. a numeric prefix such as M-3 <terminator>."
   (interactive "P")
-  (if (and 
+  (if (and
        (not count)
        proof-electric-terminator-enable
        (not (proof-inside-comment (point)))
@@ -555,26 +555,29 @@ Uses `add-completion' with a negative number of uses and ancient
 last use time, to discourage saving these into the users database."
   (interactive)
   (require 'completion)
-  (mapcar (lambda (cmpl)
-	    ;; completion gives error; trapping is tricky so test again
-	    (if (>= (length cmpl) completion-min-length)
-		(add-completion cmpl -1000 0)))
-	  (proof-ass completion-table)))
-
-;; completion not autoloaded in GNU Emacs
-(or (fboundp 'complete)
-    (autoload 'complete "completion"))
+  (defvar completion-min-length)
+  (declare-function add-completion "completion"
+                    (string &optional num-uses last-use-time))
+  (when (> (length proof-assistant) 0)
+    (mapcar (lambda (cmpl)
+	      ;; completion gives error; trapping is tricky so test again
+	      (if (>= (length cmpl) completion-min-length)
+		  (add-completion cmpl -1000 0)))
+	    (proof-ass completion-table))))
 
 ;; NB: completion table is expected to be set when proof-script
 ;; is loaded!  Call `proof-script-add-completions' to update.
 
-(unless (bound-and-true-p byte-compile-current-file)
-  (eval-after-load "completion"
-    '(proof-add-completions)))
+(eval-after-load "completion"
+  '(proof-add-completions))
 
 (defun proof-script-complete (&optional arg)
-  "Like `complete' but case-fold-search set to proof-case-fold-search."
+  "Like `complete' but case-fold-search set to `proof-case-fold-search'."
   (interactive "*p")
+  ;; completion not autoloaded in GNU Emacs
+  ;; FIXME: It's probably because we shouldn't use it ;-)
+  (require 'completion)
+  (declare-function complete "completion" (&optional arg))
   (let ((case-fold-search proof-case-fold-search))
     (complete arg)))
 
@@ -749,7 +752,7 @@ If NUM is negative, move upwards.  Return new span."
 	  ((idiom (and span (span-property span 'idiom)))
 	   (id    (and span (span-property span 'id))))
 	(popup-menu (pg-create-in-span-context-menu
-		     span idiom 
+		     span idiom
 		     (if id (symbol-name id))))))))
 
 (defun pg-toggle-visibility ()
@@ -766,7 +769,7 @@ If NUM is negative, move upwards.  Return new span."
   (append
    (list (pg-span-name span))
    (list (vector
-	  "Show/hide"  
+	  "Show/hide"
 	  (if idiom (list 'pg-toggle-element-visibility (quote idiom) name))
 	  (not (not idiom))))
    (list (vector
@@ -812,7 +815,7 @@ If NUM is negative, move upwards.  Return new span."
     (pg-hint
      (format
       "\\[proof-prf] for goals;%s \\[proof-layout-windows] refreshes"
-      (if (or proof-three-window-enable 
+      (if (or proof-three-window-enable
 	      proof-multiple-frames-enable)
 	  ""
 	(format " \\[proof-display-some-buffers] rotates output%s;"
@@ -861,10 +864,9 @@ The function `substitute-command-keys' is called on the argument."
   (interactive "e")
   (if proof-query-identifier-command
       (save-selected-window
-	(save-selected-frame
-	 (save-excursion
-	   (mouse-set-point event)
-	   (pg-identifier-near-point-query))))))
+	(save-excursion
+	  (mouse-set-point event)
+	  (pg-identifier-near-point-query)))))
 
 ;;;###autoload
 (defun pg-identifier-near-point-query ()
@@ -888,13 +890,12 @@ a popup with the information in it."
 	(pg-identifier-query
 	 identifier ctxt
 	 ;; the callback
-	 (lexical-let ((s start) (e end))
-	   (lambda (x)
-	     (save-excursion
-	       (let ((idspan (span-make s e)))
-                 ;; (span-set-property idspan 'priority 90) ; highest
-                 (span-set-property idspan 'help-echo
-                                    (pg-last-output-displayform))))))))))
+	 (lambda (_)
+	   (save-excursion
+	     (let ((idspan (span-make start end)))
+               ;; (span-set-property idspan 'priority 90) ; highest
+               (span-set-property idspan 'help-echo
+                                  (pg-last-output-displayform)))))))))
 
 (defvar proof-query-identifier-history nil
   "History for `proof-query-identifier'.")
@@ -956,7 +957,7 @@ If CALLBACK is set, we invoke that when the command completes."
       (imenu-add-to-menubar "Index")
     (progn
       (when (listp which-func-modes)
-        (setq which-func-modes 
+        (setq which-func-modes
               (remove proof-mode-for-script which-func-modes)))
       (let ((oldkeymap (keymap-parent (current-local-map))))
 	(if ;; sanity checks in case someone else set local keymap
@@ -994,7 +995,8 @@ If CALLBACK is set, we invoke that when the command completes."
   "Stored incomplete input: string between point and locked.")
 
 (defun pg-previous-input (arg)
-  "Cycle backwards through input history, saving input."
+  "Cycle backwards through input history, saving input.
+If called interactively, ARG is given by the prefix argument."
   (interactive "*p")
   (if (and pg-input-ring-index
 	   (or			       ; leaving the "end" of the ring
@@ -1008,7 +1010,8 @@ If CALLBACK is set, we invoke that when the command completes."
     (pg-previous-matching-input "." arg)))
 
 (defun pg-next-input (arg)
-  "Cycle forwards through input history."
+  "Cycle forwards through input history.
+If called interactively, ARG is given by the prefix argument."
   (interactive "*p")
   (pg-previous-input (- arg)))
 
@@ -1198,7 +1201,7 @@ removed if it matches the last item in the ring."
 
 
 ;;;###autoload
-(defun  pg-clear-input-ring ()
+(defun pg-clear-input-ring ()
   (setq pg-input-ring nil))
 
 
@@ -1220,6 +1223,10 @@ removed if it matches the last item in the ring."
 
 (defun pg-protected-undo (&optional arg)
   "As `undo' but avoids breaking the locked region.
+
+A numeric ARG serves as a repeat count.
+If called interactively, ARG is given by the prefix argument.
+If ARG is omitted, nil, or not numeric, it takes the value 1.
 
 It performs each of the desired undos checking that these operations will
 not affect the locked region, obeying `proof-strict-read-only' if required.
@@ -1246,7 +1253,7 @@ the locked region."
       (while (> repeat 0)
 	(pg-protected-undo-1 newarg) ; do some safe undos step by step
 	(setq last-command 'undo) ; need for this assignment meanwhile
-	(decf repeat)))))
+	(cl-decf repeat)))))
 
 (defun pg-protected-undo-1 (arg)
   "This function is intended to be called by `pg-protected-undo'.
@@ -1268,7 +1275,7 @@ behavior is expected."
 		 (> (proof-queue-or-locked-end) beg)
 		 proof-strict-read-only ; edit freely doesn't retract
 		 (not (and		; neither does edit in comments
-		       (proof-inside-comment beg) 
+		       (proof-inside-comment beg)
 		       (proof-inside-comment end))))
 	(if (or (eq proof-strict-read-only 'retract)
 		(y-or-n-p "Next undo will modify read-only region, retract? "))
@@ -1276,12 +1283,12 @@ behavior is expected."
 	  (when (eq last-command 'undo) (setq this-command 'undo))
 	  ;; now we can stop the function without breaking possible undo chains
 	  (error
-	   "Cannot undo without retracting to the appropriate position.")))
+	   "Cannot undo without retracting to the appropriate position")))
       (undo arg))))
 
 (defun next-undo-elt (arg)
-  "Returns the undo element that will be processed on next undo/redo,
-assuming the undo-in-region behavior will apply if ARG is non-nil."
+  "Return the undo element that will be processed on next undo/redo.
+Assume the undo-in-region behavior will apply if ARG is non-nil."
   (let ((undo-list (if arg		; handle "undo in region"
 		       (undo-make-selective-list
 			(region-beginning) (region-end)) ; can be '(nil)
@@ -1318,11 +1325,11 @@ assuming the undo-in-region behavior will apply if ARG is non-nil."
 ;;;###autoload
 (defun proof-autosend-enable (&optional nomsg)
   "Enable or disable autosend behaviour."
-  (if proof-autosend-timer 
+  (if proof-autosend-timer
       (cancel-timer proof-autosend-timer))
   (when proof-autosend-enable
     (setq proof-autosend-timer
-	  (run-with-idle-timer proof-autosend-delay 
+	  (run-with-idle-timer proof-autosend-delay
 			       t 'proof-autosend-loop))
     (setq proof-autosend-modified-tick nil)
     (unless nomsg (message "Automatic sending turned on.")))
@@ -1355,10 +1362,10 @@ assuming the undo-in-region behavior will apply if ARG is non-nil."
       (progn
 	(save-excursion
 	  (goto-char (point-max))
-	  (proof-assert-until-point 
-	   (if proof-multiple-frames-enable 
+	  (proof-assert-until-point
+	   (if proof-multiple-frames-enable
 	       'no-minibuffer-messages ; nb: not API
-	     '(no-response-display 
+	     '(no-response-display
 	       no-error-display
 	       no-goals-display))))
 	(proof-shell-wait t) ; interruptible
@@ -1381,9 +1388,9 @@ assuming the undo-in-region behavior will apply if ARG is non-nil."
 	  ;(skip-chars-forward " \t\n")
 	  (message "Trying next commands in prover...")
 	  (proof-assert-until-point
-	   (if proof-multiple-frames-enable 
+	   (if proof-multiple-frames-enable
 	       'no-minibuffer-messages ; nb: not API
-	     '(no-response-display 
+	     '(no-response-display
 	       no-error-display
 	       no-goals-display))))
 	(let ((proof-sticky-errors t))
@@ -1401,16 +1408,16 @@ assuming the undo-in-region behavior will apply if ARG is non-nil."
 	(unless (eq qol (proof-queue-or-locked-end)) ; no progress
 	  (save-excursion
 	    (goto-char qol)
-	    (proof-retract-until-point 
+	    (proof-retract-until-point
 	     (lambda (beg end)
-	       (span-make-self-removing-span 
+	       (span-make-self-removing-span
 		(save-excursion
 		  (goto-char beg)
 		  (skip-chars-forward " \t\n")
-		  (point)) 
+		  (point))
 		end
 		'face 'highlight))
-	     '(no-response-display 
+	     '(no-response-display
 	       no-error-display
 	       no-goals-display)))))))
   

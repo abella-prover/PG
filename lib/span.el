@@ -1,9 +1,9 @@
-;;; span.el --- Datatype of "spans" for Proof General
+;;; span.el --- Datatype of "spans" for Proof General  -*- lexical-binding:t -*-
 
 ;; This file is part of Proof General.
 
 ;; Portions © Copyright 1994-2012  David Aspinall and University of Edinburgh
-;; Portions © Copyright 2003, 2012, 2014  Free Software Foundation, Inc.
+;; Portions © Copyright 2003-2018  Free Software Foundation, Inc.
 ;; Portions © Copyright 2001-2017  Pierre Courtieu
 ;; Portions © Copyright 2010, 2016  Erik Martin-Dorel
 ;; Portions © Copyright 2011-2013, 2016-2017  Hendrik Tews
@@ -24,28 +24,25 @@
 
 ;;; Code:
 
-(eval-when-compile (require 'cl))       ;For lexical-let.
-
-(defalias 'span-start 'overlay-start)
-(defalias 'span-end 'overlay-end)
-(defalias 'span-set-property 'overlay-put)
-(defalias 'span-property 'overlay-get)
+(defalias 'span-start #'overlay-start)
+(defalias 'span-end #'overlay-end)
+(defalias 'span-set-property #'overlay-put)
+(defalias 'span-property #'overlay-get)
 (defun span-make (&rest args)
   (let ((span (apply #'make-overlay args)))
     (span-set-property span 'pg-span t)
     span))
-(defalias 'span-detach 'delete-overlay)
-(defalias 'span-set-endpoints 'move-overlay)
-(defalias 'span-buffer 'overlay-buffer)
+(defalias 'span-detach #'delete-overlay)
+(defalias 'span-set-endpoints #'move-overlay)
+(defalias 'span-buffer #'overlay-buffer)
 
 (defun span-p (ol)
-  "Check if an overlay belongs to PG."
+  "Check if an overlay OL belongs to PG."
   (overlay-get ol 'pg-span))
 
-(defun span-read-only-hook (overlay after start end &optional len)
+(defun span-read-only-hook (&rest _)
   (unless inhibit-read-only
-    (error "Region is read-only")))
-(add-to-list 'debug-ignored-errors "Region is read-only")
+    (user-error "Region is read-only")))
 
 (defun span-read-only (span)
   "Set SPAN to be read only."
@@ -61,12 +58,11 @@
 
 (defun span-write-warning (span fun)
   "Give a warning message when SPAN is changed, unless `inhibit-read-only' is non-nil."
-  (lexical-let ((fun fun))
-    (let ((funs (list (lambda (span afterp beg end &rest args)
-			(if (and (not afterp) (not inhibit-read-only))
-			    (funcall fun beg end))))))
-      (span-set-property span 'modification-hooks funs)
-      (span-set-property span 'insert-in-front-hooks funs))))
+  (let ((funs (list (lambda (_span afterp beg end &rest _)
+		      (if (and (not afterp) (not inhibit-read-only))
+			  (funcall fun beg end))))))
+    (span-set-property span 'modification-hooks funs)
+    (span-set-property span 'insert-in-front-hooks funs)))
 
 ;; We use end first because proof-locked-queue is often changed, and
 ;; its starting point is always 1
@@ -99,8 +95,7 @@
 
 (defun span-delete (span)
   "Run the 'span-delete-actions and delete SPAN."
-  (mapc (lambda (predelfn) (funcall predelfn))
-	(span-property span 'span-delete-actions))
+  (mapc #'funcall (span-property span 'span-delete-actions))
   (delete-overlay span))
 
 (defun span-add-delete-action (span action)
@@ -119,7 +114,7 @@
 
 (defun span-mapcar-spans-inorder (fn start end prop)
   "Map function FN over spans between START and END with property PROP."
-  (mapcar fn 
+  (mapcar fn
 	  (sort (spans-at-region-prop start end prop)
 		'span-lt)))
 
@@ -155,17 +150,17 @@ A span is before PT if it begins before the character before PT."
        (overlay-buffer span)
        (buffer-live-p (overlay-buffer span))))
 
-(defun span-raise (span)
-  "Set priority of SPAN to make it appear above other spans."
-  ;; FIXME: Emacs already uses a "shorter goes above" which takes care of
-  ;; preventing a span from seeing another.  So don't play with
-  ;; priorities, please!
-  ;; (span-set-property span 'priority 100)
-  )
+;; (defun span-raise (_span)
+;;   "Set priority of SPAN to make it appear above other spans."
+;;   ;; FIXME: Emacs already uses a "shorter goes above" which takes care of
+;;   ;; preventing a span from seeing another.  So don't play with
+;;   ;; priorities, please!
+;;   ;; (span-set-property span 'priority 100)
+;;   )
 
 (defun span-string (span)
   (with-current-buffer (overlay-buffer span)
-    (buffer-substring-no-properties 
+    (buffer-substring-no-properties
      (overlay-start span) (overlay-end span))))
 
 (defun set-span-properties (span plist)
@@ -180,7 +175,7 @@ A span is before PT if it begins before the character before PT."
         (overlays-at (posn-point (event-start event)))
         (or prop 'span))))
 
-(defun fold-spans (f &optional buffer from to maparg ignored-flags prop val)
+(defun fold-spans (f &optional buffer from to maparg _ignored-flags prop val)
   (with-current-buffer (or buffer (current-buffer))
     (let ((ols (overlays-in (or from (point-min)) (or to (point-max))))
           res)
@@ -212,7 +207,8 @@ A span is before PT if it begins before the character before PT."
   (span-mapc-spans 'span-delete start end prop))
 
 (defun span-property-safe (span name)
-  "Like span-property, but return nil if SPAN is nil."
+  "Get the property of span SPAN with property name NAME.
+Like ‘span-property’, but return nil if SPAN is nil."
   (and span (span-property span name)))
 
 (defun span-set-start (span value)
@@ -237,7 +233,7 @@ The span will remove itself after a timeout of 2 seconds."
     (add-timeout 2 'delete-overlay ol)
     ol))
 
-(defun span-delete-self-modification-hook (span &rest args)
+(defun span-delete-self-modification-hook (span &rest _)
   "Hook for overlay modification-hooks, which deletes SPAN."
   (if (span-live-p span)
       (span-delete span)))
@@ -251,7 +247,7 @@ Return the span."
       (overlay-put ol (car props) (cadr props))
       (setq props (cddr props)))
     (span-set-property ol 'modification-hooks
-                       (list 'span-delete-self-modification-hook))
+                       (list #'span-delete-self-modification-hook))
     ol))
 
 

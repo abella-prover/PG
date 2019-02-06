@@ -3,7 +3,7 @@
 ;; This file is part of Proof General.
 
 ;; Portions © Copyright 1994-2012  David Aspinall and University of Edinburgh
-;; Portions © Copyright 2003, 2012, 2014  Free Software Foundation, Inc.
+;; Portions © Copyright 2003-2018  Free Software Foundation, Inc.
 ;; Portions © Copyright 2001-2017  Pierre Courtieu
 ;; Portions © Copyright 2010, 2016  Erik Martin-Dorel
 ;; Portions © Copyright 2011-2013, 2016-2017  Hendrik Tews
@@ -30,6 +30,7 @@
 ;;
 
 ;;; Code:
+(eval-when-compile (require 'cl-lib))
 (eval-when-compile
   (require 'span)
   (require 'unicode-tokens))
@@ -52,15 +53,15 @@
   (let* ((tokens   (proof-ass unicode-tokens-enable))
 	 (cmd      (buffer-substring-no-properties
 		      (span-start span) (span-end span)))
-	 (tcmd     (if tokens 
+	 (tcmd     (if tokens
 		       ;; no subscripts of course
 		       (unicode-tokens-encode-str cmd)
 		     cmd))
 	 (helpspan (span-property span 'pg-helpspan))
-	 (resp     (when helpspan 
+	 (resp     (when helpspan
 		     (span-property helpspan 'response)))
 	 (tresp    (if resp
-		       (if tokens 
+		       (if tokens
 			   (unicode-tokens-encode-str resp)
 			 resp)
 		     ""))
@@ -72,7 +73,7 @@
 		    (t "command")))
 	 (label    (span-property span 'rawname))
 	 (frameid  (int-to-string pg-movie-frame)))
-    (incf pg-movie-frame)
+    (cl-incf pg-movie-frame)
     (pg-xml-node frame
 		 (list (pg-xml-attr frameNumber frameid))
 		 (list
@@ -99,7 +100,7 @@ If FORCE, overwrite existing file without asking."
 		(point-min)
 		(point-max)))
 	(movie-file-name
-	 (concat 
+	 (concat
 	  (file-name-sans-extension
 		  (buffer-file-name)) ".xml")))
 
@@ -114,7 +115,7 @@ If FORCE, overwrite existing file without asking."
 ;;;###autoload
 (defun pg-movie-export-from (script &optional force)
   "Export the movie file that results from processing SCRIPT."
-  (interactive "fFile: 
+  (interactive "fFile:
 P")
   (let ((proof-full-annotation t) ; dynamic
 	(proof-fast-process-buffer t))
@@ -126,10 +127,10 @@ P")
 (defun pg-movie-export-directory (dir extn)
   "Export movie files from directory DIR with extension EXTN.
 Existing XML files are overwritten."
-  (interactive "DDirectory: 
+  (interactive "DDirectory:
 sFile extension: ")
-  (let ((files (directory-files 
-		dir t 
+  (let ((files (directory-files
+		dir t
 		(concat "\\." extn "$"))))
     (dolist (f files)
       (pg-movie-export-from f 'force))
