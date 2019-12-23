@@ -54,6 +54,8 @@
  proof-response-font-lock-keywords  abella-response-font-lock-keywords
  proof-shell-handle-output-system-specific abella-shell-handle-output
  ;proof-non-undoables-regexp    "undo\\|Back\\|Reset\\|abort\\|[a-z].*"
+ ;;; abella doesn't have official indentation
+ indent-line-function 'indent-relative
 )
 
 (provide 'abella)
