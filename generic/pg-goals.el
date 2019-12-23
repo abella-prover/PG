@@ -3,7 +3,7 @@
 ;; This file is part of Proof General.
 
 ;; Portions © Copyright 1994-2012  David Aspinall and University of Edinburgh
-;; Portions © Copyright 2003-2018  Free Software Foundation, Inc.
+;; Portions © Copyright 2003-2019  Free Software Foundation, Inc.
 ;; Portions © Copyright 2001-2017  Pierre Courtieu
 ;; Portions © Copyright 2010, 2016  Erik Martin-Dorel
 ;; Portions © Copyright 2011-2013, 2016-2017  Hendrik Tews
@@ -91,16 +91,15 @@ If KEEPRESPONSE is non-nil, we assume that a response message
 corresponding to this goals message has already been displayed
 before this goals message (see `proof-shell-handle-delayed-output'),
 so the response buffer should not be cleared."
-  (save-excursion
-    ;; Response buffer may be out of date. It may contain (error)
-    ;; messages relating to earlier proof states
+  ;; Response buffer may be out of date. It may contain (error)
+  ;; messages relating to earlier proof states
 
-    ;; Erase the response buffer if need be, maybe removing the
-    ;; window.  Indicate it should be erased before the next output.
-    (pg-response-maybe-erase t t nil keepresponse)
+  ;; Erase the response buffer if need be, maybe removing the
+  ;; window.  Indicate it should be erased before the next output.
+  (pg-response-maybe-erase t t nil keepresponse)
 
-    ;; Erase the goals buffer and add in the new string
-    (set-buffer proof-goals-buffer)
+  ;; Erase the goals buffer and add in the new string
+  (with-current-buffer proof-goals-buffer
 
     (setq buffer-read-only nil)
 
@@ -109,7 +108,7 @@ so the response buffer should not be cleared."
 
     ;; Only display if string is non-empty.
     (unless (string-equal string "")
-      (insert string))
+      (funcall pg-insert-text-function string))
 
     (setq buffer-read-only t)
     (set-buffer-modified-p nil)
