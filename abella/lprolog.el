@@ -47,6 +47,7 @@
     lprolog-mode-syntax-table)
   "Syntax table for lprolog-mode")
 
+;;;###autoload
 (defun lprolog-mode ()
   "Major mode for editing Lambda Prolog files"
   (interactive)
