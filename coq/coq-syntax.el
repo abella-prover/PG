@@ -200,11 +200,12 @@ so for the following reasons:
      ("erewrite" "er" "erewrite #" t "erewrite")
      ("eright" "erig" "eright" "eright")
      ("esplit" "esp" "esplit" t "esplit")
+     ("etransitivity" "etr" "etransitivity" t "etransitivity")
      ;;     ("exact" "exa" "exact" t "exact")
      ("exfalso" "exf" "exfalso" t "exfalso")
      ("exists" "ex" "exists #" t "exists")
      ;;     ("fail" "fa" "fail" nil)
-     ;;     ("field" "field" "field" t "field")
+     ("field" "field" "field" t "field")
      ("false_hyp" nil "false_hyp @{H} @{G}" t "false_hyp")
      ("firstorder" "fsto" "firstorder" t "firstorder")
      ("firstorder with" "fsto" "firstorder with #" t)
@@ -235,14 +236,16 @@ so for the following reasons:
      ("inversion_clear" "invcl" "inversion_clear" t "inversion_clear")
      ("lapply" "lap" "lapply" t "lapply")
      ("lazy" "lazy" "lazy beta delta [#] iota zeta" t "lazy")
-     ("lazymatch with" "m" "lazymatch # with\n| # => #\nend")
+     ("lazymatch with" "lazym" "lazymatch # with\n| # => #\nend")
+     ("lazy_match! with" "lazy_m" "lazy_match! # with\n| # => #\nend")
      ("left" "left" "left" t "left")
      ("lia" nil "lia" t "lia")
      ("linear" "lin" "linear" t "linear")
      ("load" "load" "load" t "load")
      ("lra" nil "lra" t "lra")
      ("move after" "mov" "move # after #" t "move")
-     ("multimatch with" "m" "multimatch # with\n| # => #\nend")
+     ("multimatch with" "mm" "multimatch # with\n| # => #\nend")
+     ("multi_match! with" "multi_m" "multi_match! # with\n| # => #\nend")
      ("nia" nil "nia" t "nia")
      ("now_show" nil "now_show" t "now_show")
      ("nra" nil "nra" t "nra")
@@ -257,8 +260,10 @@ so for the following reasons:
      ("quote" "quote" "quote" t "quote")
      ("quote []" "quote2" "quote # [#]" t)
      ("red" "red" "red" t "red")
+     ("rapply" "rap" "rapply #" t "rapply")
      ("refine" "ref" "refine" t "refine")
      ;;      ("reflexivity" "refl" "reflexivity #" t "reflexivity")
+     ("remember" "rem" "remember # as #" t "remember")
      ("rename into" "ren" "rename # into #" t "rename")
      ("replace with" "rep" "replace # with #" t "replace")
      ("replace with in" "repi" "replace # with # in #" t)
@@ -324,6 +329,7 @@ so for the following reasons:
      ("unlock" "unlock" "unlock #" t "unlock")
      ("suffices" "suffices" "suffices # : #" t "suffices")
      ("suff" "suff" "suff # : #" t "suff")
+     ("zify" nil "zify" t "zify")
      )
    coq-user-tactics-db)
   "Coq tactics information list.  See `coq-syntax-db' for syntax."
@@ -346,7 +352,6 @@ so for the following reasons:
      ("exact" "exa" "exact" t "exact")
      ("fourier" "four" "fourier" t "fourier")
      ("fail" "fa" "fail" nil)
-     ("field" "field" "field" t "field")
      ("gfail" "gfa" "gfail" nil "gfail")
      ("lia" nil "lia" t "lia")
      ("lra" nil "lra" t "lra")
@@ -370,7 +375,8 @@ so for the following reasons:
 (defvar coq-solve-cheat-tactics-db
   (append
    '(("admit" nil "admit" t "admit")
-     ("Admitted" nil "Admitted" t "Admitted"))
+     ("Admitted" nil "Admitted" t "Admitted")
+     ("Abort" nil "Abort" t "Abort"))
    coq-user-cheat-tactics-db)
   "Coq tactic(al)s that solve a subgoal."
   )
@@ -424,6 +430,7 @@ so for the following reasons:
     ("Global Variables" "gvs" "Global Variables # , #: #." t "Global\\s-+Variables")
     ("Hint Constructors" "hc" "Hint Constructors # : #." t "Hint\\s-+Constructors")
     ("Hint Extern" "he" "Hint Extern @{cost} @{pat} => @{tac} : @{db}." t "Hint\\s-+Extern")
+    ("Hint Mode" "hm" "Hint Mode # @{mode...} : @{db}." t "Hint\\s-+Mode")
     ("Hint Immediate" "hi" "Hint Immediate # : @{db}." t "Hint\\s-+Immediate")
     ("Hint Resolve" "hr" "Hint Resolve # : @{db}." t "Hint\\s-+Resolve")
     ("Hint Rewrite ->" "hrw" "Hint Rewrite -> @{t1,t2...} using @{tac} : @{db}." t "Hint\\s-+Rewrite")
@@ -448,6 +455,7 @@ so for the following reasons:
 
 (defvar coq-defn-db
   '(
+    ("Canonical Structure" nil "Canonical Structure #." t "Canonical\\s-+Structure")
     ("CoFixpoint" "cfix" "CoFixpoint # (#:#) : # :=\n#." t "CoFixpoint")
     ("CoInductive" "coindv" "CoInductive # : # :=\n|# : #." t "CoInductive")
     ("Class" "class" "Class [ # ] := \n# : #;\n# : #." t "Class")
@@ -488,8 +496,18 @@ so for the following reasons:
     ("Instance" nil "Instance #:#.\nProof.\n#Defined." t "Instance")
     ("Program Instance" "pinstance" "Program Instance [ # ] => # where \n# := #;\n# := #." t "Program\\s-+Instance")
     ("Let" "Let" "Let # : # := #." t "Let")
-    ("Local Ltac" nil "Local Ltac # := #" t "Local\\s-+Ltac")
-    ("Ltac" "ltac" "Ltac # := #" t "Ltac")
+    ("Local Ltac2" nil "Local Ltac2 # := #." t "Local\\s-+Ltac2")
+    ("Ltac2 Type" "lt2rty" "Ltac2 Type rec # := #." t "Ltac2 Type rec")
+    ("Ltac2 Type" "lt2ty" "Ltac2 Type # := #." t "Ltac2 Type")
+    ("Ltac2 Type" "lt2oty" "Ltac2 Type # ::= #." t "Ltac2 Type")
+    ("Ltac2 Type" "lt2wty" "Ltac2 Type #." t "Ltac2 Type")
+    ("Ltac2" "lt2mr" "Ltac2 mutable rec # := #." t "Ltac2 mutable rec")
+    ("Ltac2" "lt2m" "Ltac2 mutable # := #." t "Ltac2 mutable")
+    ("Ltac2" "lt2r" "Ltac2 rec # := #." t "Ltac2 rec")
+    ("Ltac2" "lt2s" "Ltac2 Set # := #." t "Ltac2 Set")
+    ("Ltac2" "lt2" "Ltac2 # := #." t "Ltac2") 
+    ("Local Ltac" nil "Local Ltac # := #." t "Local\\s-+Ltac")
+    ("Ltac" "ltac" "Ltac # := #." t "Ltac")
     ("Module :=" "mo" "Module # : # := #." t ) ; careful
     ("Module <: :=" "mo2" "Module # <: # := #." t ) ; careful
     ("Module Import :=" "moi" "Module Import # : # := #." t ) ; careful
@@ -501,6 +519,7 @@ so for the following reasons:
     ("Scheme Induction" "sci" "Scheme @{name} := Induction for # Sort #." t)
     ("Scheme Minimality" "scm" "Scheme @{name} := Minimality for # Sort #." t)
     ("Structure" "str" "Structure # : # := {\n# : #;\n# : # }" t "Structure")
+    ("Typeclasses eauto" nil "Typeclasses eauto := #." t "Typeclasses\\s-+eauto")
     ("Variant" "varv" "Variant # : # := # : #." t "Variant")
     )
   "Coq definition keywords information list.  See `coq-syntax-db' for syntax."
@@ -552,6 +571,7 @@ so for the following reasons:
    '(
      ("About" nil "About #." nil "About")
      ("Check" nil "Check" nil "Check")
+     ("Compute" nil "Compute" nil "Compute")
      ("Fail" nil "Fail" nil "fail")
      ("Inspect" nil "Inspect #." nil "Inspect")
      ("Locate File" nil "Locate File \"#\"." nil "Locate\\s-+File")
@@ -560,10 +580,10 @@ so for the following reasons:
      ("Locate" nil "Locate" nil "Locate")
      ("Print Coercions" nil "Print Coercions." nil "Print\\s-+Coercions")
      ("Print Hint" nil "Print Hint." nil "Print\\s-+Hint" coq-PrintHint)
+     ("Print Ltac2" "lt2p" "Print Ltac2 #." nil "Print Ltac2")
      ("Print" "p" "Print #." nil "Print")
      ("Pwd" nil "Pwd." nil "Pwd")
      ("Search" nil "Search #" nil "Search")
-     ("SearchAbout" nil "SearchAbout #" nil "SearchAbout")
      ("SearchPattern" nil "SearchPattern (#)" nil "SearchPattern")
      ("SearchRewrite" nil "SearchRewrite #" nil "SearchRewrite")
      ("Show" nil "Show #." nil "Show")
@@ -597,7 +617,7 @@ so for the following reasons:
     ("Local Arguments" nil "Local Arguments @{id} : @{rule}" t "Local\\s-+Arguments")
     ("Arguments" "args" "Arguments @{id} : @{rule}" t "Arguments")
     ("Bind Scope" "bndsc" "Bind Scope @{scope} with @{type}" t "Bind\\s-+Scope")
-    ("Canonical Structure" nil "Canonical Structure #." t "Canonical\\s-+Structure")
+    ("Canonical" nil "Canonical #." t "Canonical")
     ("Cd" nil "Cd #." nil "Cd")
     ("Local Close Scope" "lclsc" "Local Close Scope #" t "Local\\s-+Close\\s-+Scope")
     ("Close Scope" "clsc" "Close Scope #" t "Close\\s-+Scope")
@@ -616,6 +636,7 @@ so for the following reasons:
     ("Extraction Library" "extrl" "Extraction Library @{id}." nil "Extraction\\s-+Library")
     ("Extraction" "extr" "Extraction @{id}." nil "Extraction")
     ("Focus" nil "Focus #." nil "Focus")
+    ("From" nil "From #." nil "From")
     ("Generalizable Variables" nil "Generalizable Variables #." t "Generalizable\\s-+Variables")
     ("Generalizable All Variables" nil "Generalizable All Variables." t "Generalizable\\s-+All\\s-+Variables")
     ("Identity Coercion" nil "Identity Coercion #." t "Identity\\s-+Coercion")
@@ -623,9 +644,12 @@ so for the following reasons:
     ("Implicit Arguments On" nil "Implicit Arguments On." t "Implicit\\s-+Arguments\\s-+On")
     ("Implicit Arguments" nil "Implicit Arguments # [#]." t "Implicit\\s-+Arguments")
     ("Implicit Types" nil "Implicit Types # : #." t "Implicit\\s-+Types")
+    ("Implicit Type" nil "Implicit Type # : #." t "Implicit\\s-+Type")
     ("Import" nil "Import #." t "Import")
     ("Include" nil "Include #." t "Include")
     ("Infix" "inf" "Infix \"#\" := # (at level #) : @{scope}." t "Infix")
+    ("Ltac2 Notation" "lt2n" "Ltac2 Notation # := #." t "Ltac2 Notation")
+    ("Ltac2 Eval" "lt2e" "Ltac2 Eval #." nil "Ltac2 Eval")
     ("Notation (assoc)" "notas" "Notation \"#\" := # (at level #, # associativity)." t)
     ("Notation (at assoc)" "notassc" "Notation \"#\" := # (at level #, # associativity) : @{scope}." t)
     ("Notation (at at scope)" "notasc" "Notation \"#\" := # (at level #, # at level #) : @{scope}." t)
@@ -645,6 +669,7 @@ so for the following reasons:
     ("Recursive Extraction" "recextr" "Recursive Extraction @{id}." nil "Recursive\\s-+Extraction")
     ("Recursive Extraction Library" "recextrl" "Recursive Extraction Library @{id}." nil "Recursive\\s-+Extraction\\s-+Library")
     ("Recursive Extraction Module" "recextrm" "Recursive Extraction Module @{id}." nil "Recursive\\s-+Extraction\\s-+Module")
+    ("Remove Hints" nil "Remove Hints #: #." nil "Remove\\s-+Hints")
     ("Remove LoadPath" nil "Remove LoadPath" nil "Remove\\s-+LoadPath")
     ("Remove LoadPath" nil "Remove LoadPath" nil "Remove\\s-+LoadPath")
     ("Remove Printing If" nil "Remove Printing If #." t "Remove\\s-+Printing\\s-+If")
@@ -715,7 +740,7 @@ so for the following reasons:
     ("Set Primitive Projections" nil "Set Primitive Projections" t "Set Primitive\\s-+Projections")
     ("Set Printing All" nil "Set Printing All" t "Set\\s-+Printing\\s-+All")
     ("Set Printing Coercions" nil "Set Printing Coercions" t "Set\\s-+Printing\\s-+Coercions")
-    ("Set Printing Compact Contexts" nil "Set Printing Compact Contexts" t "Set\\s-+Printing\\s-+Compact\\s-+Contexts")
+    ("Set Printing Compact Contexts" nil "set Printing Compact Contexts" t "set\\s-+Printing\\s-+Compact\\s-+Contexts")
     ("Set Printing Depth" nil "Set Printing Depth" t "Set\\s-+Printing\\s-+Depth")
     ("Set Printing Existential Instances" nil "Set Printing Existential Instances" t "Set\\s-+Printing\\s-+Existential\\s-+Instances")
     ("Set Printing Goal Tags" nil "Set Printing Goal Tags" t "Set\\s-+Printing\\s-+Goal\\s-+Tags")
@@ -843,7 +868,8 @@ so for the following reasons:
     ("Unset Parsing Explicit" nil "Unset Parsing Explicit" t "Unset Parsing\\s-+Explicit")
     ("Unset Primitive Projections" nil "Unset Primitive Projections" t "Unset Primitive\\s-+Projections")
     ("Unset Printing All" nil "Unset Printing All" t "Unset Printing\\s-+All")
-    ("Unset Printing Coercions" nil "Unset Printing Coercions" t "Unset Printing\\s-+Coercions")
+    ("Unset Printing Coercions" nil "Unset Printing Coercions" t "Unset\\s-+Printing\\s-+Coercions")
+    ("Unset Printing Compact Contexts" nil "Unset Printing Compact Contexts" t "Unset\\s-+Printing\\s-+Compact\\s-+Contexts")
     ("Unset Printing Depth" nil "Unset Printing Depth" t "Unset Printing\\s-+Depth")
     ("Unset Printing Existential Instances" nil "Unset Printing Existential Instances" t "Unset Printing\\s-+Existential\\s-+Instances")
     ("Unset Printing Implicit" nil "Unset Printing Implicit" t "Unset Printing\\s-+Implicit")
@@ -934,7 +960,7 @@ so for the following reasons:
     ("forall (4 args)" "fo4" "forall (#:#) (#:#) (#:#) (#:#), #")
     ("if" "if" "if # then # else #" nil "if")
     ("let in" "li" "let # := # in #" nil "let")
-    ("match! (from type)" nil "" nil "match" coq-insert-match)
+    ("match?" nil "" nil "match" coq-insert-match)
     ("match with" "m" "match # with\n| # => #\nend")
     ("match with 2" "m2" "match # with\n| # => #\n| # => #\nend")
     ("match with 3" "m3" "match # with\n| # => #\n| # => #\n| # => #\nend")
@@ -1084,6 +1110,31 @@ It is used:
              (not (string-match "\\`Proof\\s-*\\(\\.\\|\\_<with\\_>\\|\\_<using\\_>\\)" str))))))
 
 
+;; ----- regular expressions for the proof omit feature
+;; see `proof-omit-proofs-configured' in generic/proof-config
+
+(defcustom coq-proof-start-regexp "^Proof\\(\\.\\| \\)"
+  "Value for `proof-script-proof-start-regexp'."
+  :type 'regexp
+  :group 'coq)
+
+(defcustom coq-proof-end-regexp "^\\(Qed\\|Admitted\\)\\."
+  "Value for `proof-script-proof-end-regexp'.
+This is similar to `coq-save-command-regexp-strict' but slightly
+different."
+  :type 'regexp
+  :group 'coq)
+
+(defcustom coq-definition-end-regexp "^\\(Defined\\|Abort\\)\\(\\.\\| \\)"
+  "Value for `proof-script-definition-end-regexp'."
+  :type 'regexp
+  :group 'coq)
+  
+(defcustom coq-omit-proof-admit-command "Admitted."
+  "Value for `proof-script-proof-admit-command'."
+  :type 'string
+  :group 'coq)
+
 ;; ----- keywords for font-lock.
 
 (defvar coq-keywords-kill-goal
@@ -1151,7 +1202,7 @@ It is used:
   (append
    '(
      "False" "True" "after" "as" "cofix" "fix" "forall" "fun" "match"
-     "lazymatch" "multimatch"
+     "lazymatch" "multimatch" "lazy_match" "multi_match"
      "return" "struct" "else" "end" "if" "in" "into" "let" "then"
      "using" "with" "beta" "delta" "iota" "zeta" "after" "until"
      "at" "Sort" "Time" "dest" "where"
@@ -1252,6 +1303,10 @@ It is used:
 (defun coq-first-abstr-regexp (paren end)
   (concat paren "\\s-*\\(" coq-ids "\\)\\s-*" end))
 
+(defun coq-first-abstr-without-space-regexp (paren end)
+  "Variant of `coq-first-abstr-regexp' without space between PAREN & `coq-ids'."
+  (concat paren "\\(" coq-ids "\\)\\s-*" end))
+
 (defcustom coq-variable-highlight-enable t
   "Activates partial bound variable highlighting."
   :type 'boolean
@@ -1286,10 +1341,16 @@ It is used:
       ;;               (list 0 font-lock-variable-name-face)))
       ;; parenthesized binders
       (list (coq-first-abstr-regexp "(" ":[ a-zA-Z]") 1 'font-lock-variable-name-face)
-      (list (coq-first-abstr-regexp "{" ":[ a-zA-Z]") 1 'font-lock-variable-name-face)
+      ;; Don't use coq-first-abstr-regexp here, see ProofGeneral/PG#581:
+      (list (coq-first-abstr-without-space-regexp "{" ":[ a-zA-Z]") 1 'font-lock-variable-name-face)
+      ;; Likewise, for https://coq.github.io/doc/V8.12.0/refman/language/extensions/implicit-arguments.html#implicit-argument-binders :
+      (list (coq-first-abstr-without-space-regexp "\\[" ":[ a-zA-Z]") 1 'font-lock-variable-name-face)
       )))
   "*Font-lock table for Coq terms.")
 
+
+(defconst coq-show-proof-diffs-regexp
+  "\\`Show Proof\\(?: Diffs\\| Diffs removed\\)?\\.\\'")
 
 (defconst coq-save-command-regexp
   ;; FIXME: The surrounding grouping parens are probably not needed.
@@ -1335,7 +1396,7 @@ It is used:
 
 
 (defconst coq-context-marker-regexp
-  (concat (regexp-opt '("ltac" "constr" "uconstr") 'symbols) ":"))
+  (concat (regexp-opt '("ltac" "constr" "uconstr" "ltac1" "ltac2") 'symbols) ":"))
 
 ;;
 ;; font-lock

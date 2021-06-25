@@ -8,6 +8,11 @@ and the PG Trac http://proofgeneral.inf.ed.ac.uk/trac
 
 ** Generic changes
 
+*** new command and menu item to easily upgrade all packages
+    - To upgrade all ELPA packages (including ProofGeneral if it was
+      installed via MELPA), do "M-x proof-upgrade-elpa-packages RET"
+      or use the "Proof-General > Upgrade ELPA packages..." menu item
+
 *** bug fixes
     - Using query-replace (or replace-string) in the processed region
       doesn't wrongly jump to the first match anymore.
@@ -27,23 +32,52 @@ and the PG Trac http://proofgeneral.inf.ed.ac.uk/trac
 
 ** Coq changes
 
+*** fix highlighting issues for ssr tactics ending with colon
+
+    Now, { exact: term. } will always be correctly highlighted.
+
+    However, only (forall {T: Type}, Type) will be highlighted,
+    unlike term (forall { T: Type }, Type) that has a spurious space.
+
+    Also in (forall [T: Type], Type), variable T is now highlighted.
+
 *** new menu Coq -> Auto Compilation for all background compilation options
+
+*** support for 8.11 vos and vok compilation
+
+    See menu Coq -> Auto Compilation -> vos compilation, option
+    coq-compile-vos and subsection "11.3.3 Quick and inconsistent
+    compilation" in the Coq reference manual.
 
 *** support for 8.5 quick compilation
 
-    See new menu Coq -> Auto Compilation. Select "no quick" as
-    long as you have not switched to "Proof using" to compile
-    without -quick. Select "quick no vio2vo" to use -quick
-    without vio2vo (and guess what "quick and vio2vo" means ;-),
-    select "ensure vo" to ensure a sound development. See the
+    See new menu Coq -> Auto Compilation -> Quick compilation.
+    Select "no quick" as long as you have not switched to "Proof
+    using" to compile without -quick. Select "quick no vio2vo" to
+    use -quick without vio2vo (and guess what "quick and vio2vo"
+    means ;-), select "ensure vo" to ensure a sound development.
+    Quick compilation is only supported for Coq < 8.11. See the
     option `coq-compile-quick' or the subsection "11.3.3 Quick
-    compilation and .vio Files" in the Coq reference manual.
+    and inconsistent compilation" in the Coq reference manual.
 
 *** new option coq-compile-keep-going (in menu Coq -> Auto Compilation)
 
     Similar to ``make -k'', with this option enabled, background
     compilation does not stop at the first error but rather
     continues as far as possible.
+
+*** Automatic insertion of "Proof using" annotations.
+
+    PG now supports the "Suggest Proof Using" by inserting
+    (automatically or by contextual menu or by a command) the "Proof
+    using" annotation suggested by Coq. This suggestion happens at
+    "Qed" command. By default PG will only highlight the corresponding
+    "Proof" keyword and let the user actively ask for insertion. You
+    can customize this behaviour by setting the
+    coq-accept-proof-using-suggestion to one of these values: 'always,
+    'highlight, 'ask, 'never. This is also settable from Coq menu. See
+    documentation of this variable for an explanation of the different
+    possible values and some more information.
 
 *** Limited extensibility for indentation 
 
@@ -59,6 +93,22 @@ and the PG Trac http://proofgeneral.inf.ed.ac.uk/trac
     (setq coq-smie-user-tokens '(("xor" . "\\/")))
     
     The set of tokens can be seen in variable smie-grammar.
+
+*** Indentation of monadic notations.
+    Using the extensibility for indentation described above we provide
+    a way to define your own monadic operators using the
+    coq-smie-monadic-tokens in the same spirit as coq-smie-user-tokens
+    above.
+
+    By default two well established syntax are supported:
+
+       x <- e ;;
+       e
+
+     and 
+
+       do x <- e ;
+       e
 
 *** Clickable Hypothesis in goals buffer to copy/paste hyp names
 
@@ -95,6 +145,31 @@ and the PG Trac http://proofgeneral.inf.ed.ac.uk/trac
 *** Support Coq's feature for highlighting the differences
     between successive proof steps.  See section 11.8 ("Showing
     Proof Diffs") in the documentation.
+
+*** Support Ssreflect's proof style for inserting an intros tactic
+    when doing "C-c C-a TAB": PG inserts "move=> ..." if the current
+    file contains "Require ... ssreflect" on the same line; otherwise
+    PG inserts "intros ..." as before.
+
+*** Customizing Search Blacklist (command created and menu entry moved)
+    To change the list of blacklisted string for Search commands
+    during development, use now
+    coq-change-search-blacklist-interactive. The menu for this has
+    moved, it is now in Coq/Other Queries/Search Blacklist.
+
+    To change the default blacklist, set variable
+    coq-search-blacklist-string (unchanged).
+
+*** Proof General can omit complete opaque proofs
+    This speeds up asserting of larger chunks at the price of
+    letting errors in these proofs go unnoticed. Configure
+    `proof-omit-proofs-option' or select "Proof-General -> Quick
+    Options -> Processing -> Omit Proofs". See also section
+    "11.5 Omitting proofs for speed" in the manual.
+
+    Beware that if lemmas are proved in a section, these lemmas should
+    start with a "Proof using" annotation, otherwise Coq would compute
+    a wrong type for them when this omitting-proofs feature is enabled.
 
 *** bug fixes
     - avoid leaving partial files behind when compilation fails
@@ -591,7 +666,7 @@ and the PG Trac http://proofgeneral.inf.ed.ac.uk/trac
     - Indentation: several error fixed. If you want to indent tactics
     inside "Instance" or "Add Parametric Relation" etc, please put
     "Proof." before the tactics, there is no way for emacs to guess
-    wether these commands initiate new goals or not.
+    whether these commands initiate new goals or not.
     - coq prog args permanent settings is working again
     - when a proof is completed, the goals buffer is cleared again.
 

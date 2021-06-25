@@ -59,8 +59,8 @@ On Windows you might need something like:
   :group 'coq)
 
 (defcustom coq-pinned-version nil
-  "Which version of Coq you are using.
-There should be no need to set this value unless you use the trunk from
+  "Manual coq version override (rarely needed).
+There should be no need to set this value unless you use old trunk versions from
 the Coq github repository.  For Coq versions with decent version numbers
 Proof General detects the version automatically and adjusts itself.  This
 variable should contain nil or a version string."
@@ -110,23 +110,20 @@ If it doesn't look right, try `coq-autodetect-version'."
   "Call coqtop with the given OPTION and return the output.
 The given option should make coqtop return immediately.
 Optionally check the return code and return nil if the check
-fails.
+fails.  Return also nil on other kinds of errors (e.g., `coq-prog-name'
+not found).
 This function supports calling coqtop via tramp."
-  (let* ((default-directory
-           (if (file-accessible-directory-p default-directory)
-               default-directory
-             "/"))
-         (coq-command (shell-quote-argument (or coq-prog-name "coqtop")))) 
-    (with-temp-buffer
-      ;; Use `shell-command' via `find-file-name-handler' instead of
-      ;; `process-line': when the buffer is running TRAMP, PG uses
-      ;; `start-file-process', loading the binary from the remote server.
-      (let* ((shell-command-str (format "%s %s" coq-command (or option "")))
-             (fh (find-file-name-handler default-directory 'shell-command))
-             (retv (if fh (funcall fh 'shell-command shell-command-str (current-buffer))
-                     (shell-command shell-command-str (current-buffer)))))
-        (if (or (not expectedretv) (equal retv expectedretv))
-            (buffer-string))))))
+  (let ((coq-command (or coq-prog-name "coqtop"))
+        retv)
+    (condition-case nil
+        (with-temp-buffer
+          (setq retv (if option
+                         (process-file coq-command nil t nil option)
+                       (process-file coq-command nil t nil)))
+          (if (or (not expectedretv) (equal retv expectedretv))
+              (buffer-string)))
+      (error nil))))
+        
 
 (defun coq-autodetect-version (&optional interactive-p)
   "Detect and record the version of Coq currently in use.
@@ -143,7 +140,10 @@ Interactively (with INTERACTIVE-P), show that number."
 (defun coq-autodetect-help (&optional interactive-p)
   "Record the output of coqotp -help in `coq-autodetected-help'."
   (interactive '(t))
-  (setq coq-autodetected-help (coq-callcoq "-help")))
+  (let ((coq-output (coq-callcoq "-help")))
+    (if coq-output
+        (setq coq-autodetected-help coq-output)
+      (setq coq-autodetected-help ""))))
 
 
 (defun coq--version< (v1 v2)
@@ -191,6 +191,18 @@ Return nil if the version cannot be detected."
   (let ((coq-version-to-use (or (coq-version t) "8.9")))
     (condition-case err
 	(not (coq--version< coq-version-to-use "8.10alpha"))
+      (error
+       (cond
+	((equal (substring (cadr err) 0 15) "Invalid version")
+	 (signal 'coq-unclassifiable-version  coq-version-to-use))
+	(t (signal (car err) (cdr err))))))))
+
+(defun coq--post-v811 ()
+  "Return t if the auto-detected version of Coq is >= 8.11.
+Return nil if the version cannot be detected."
+  (let ((coq-version-to-use (or (coq-version t) "8.10")))
+    (condition-case err
+	(not (coq--version< coq-version-to-use "8.11"))
       (error
        (cond
 	((equal (substring (cadr err) 0 15) "Invalid version")
@@ -426,15 +438,34 @@ LOADPATH, CURRENT-DIRECTORY, PRE-V85: see `coq-include-options'."
 ;; Coq process, see 'defpacustom prog-args' in pg-custom.el for
 ;; documentation.
 
+;; Regular files should be of the form "valid_modulename.v" coq
+;; accepts lots of things as letter, this is probably much stricter.
+;; In practice it should be OK though, except maybe for non latin
+;; characters.
+(defun coq-regular-filename-p (s)
+  (let ((noext (file-name-base s)))
+    (string-match-p "\\`[[:alpha:]_][[:alnum:]_]*\\'" noext)))
+
 (defun coq-coqtop-prog-args (loadpath &optional current-directory pre-v85)
   ;; coqtop always adds the current directory to the LoadPath, so don't
   ;; include it in the -Q options. This is not true for coqdep.
   "Build a list of options for coqc.
 LOADPATH, CURRENT-DIRECTORY, PRE-V85: see `coq-coqc-prog-args'."
-  (append
-   (if (and (coq--supports-topfile) buffer-file-name)
-       (cons "-topfile" (cons buffer-file-name nil)) "")
-   (cons "-emacs" (coq-coqc-prog-args loadpath current-directory pre-v85))))
+  (let ((topfile-supported (coq--supports-topfile)))
+    (append
+     ;; it is better to inform coqtop of the name of the current module
+     ;; using the -topfile option, so that coqtop understands references
+     ;; to it. But don't insist if this would fail (because of wrong
+     ;; file name): Some people want to script .v files without ever
+     ;; compiling them.
+     (if (and topfile-supported buffer-file-name
+              (coq-regular-filename-p buffer-file-name))
+         (cons "-topfile" (cons buffer-file-name nil))
+       (if (and topfile-supported buffer-file-name)
+           (message "Warning: this Coq buffer is probably not compilable \
+because of its name, no -topfile option set."))
+       nil)
+     (cons "-emacs" (coq-coqc-prog-args loadpath current-directory pre-v85)))))
 
 (defun coq-prog-args ()
   "Recompute `coq-load-path' before calling `coq-coqtop-prog-args'."
@@ -457,13 +488,13 @@ path (including the -R lib options) (see `coq-load-path')."
 
 (defcustom coq-project-filename "_CoqProject"
   "The name of coq project file.
-The coq project file of a coq developpement (cf. Coq documentation on
+The coq project file of a coq development (cf. Coq documentation on
 \"makefile generation\") should contain the arguments given to
 coq_makefile. In particular it contains the -I and -R
 options (preferably one per line).  If `coq-use-coqproject' is
-t (default) the content of this file will be used by proofgeneral to
+t (default) the content of this file will be used by Proof General to
 infer the `coq-load-path' and the `coq-prog-args' variables that set
-the coqtop invocation by proofgeneral.  This is now the recommended
+the coqtop invocation by Proof General.  This is now the recommended
 way of configuring the coqtop invocation.  Local file variables may
 still be used to override the coq project file's configuration.
 .dir-locals.el files also work and override project file settings."
@@ -621,27 +652,27 @@ Does nothing if `coq-use-project-file' is nil."
 ;; need to make this hook local.
 ;; hack-local-variables-hook seems to hack local and dir local vars.
 (add-hook 'coq-mode-hook
-          '(lambda ()
-             (add-hook 'hack-local-variables-hook
-                       'coq-load-project-file
-                       nil t)))
+          (lambda ()
+            (add-hook 'hack-local-variables-hook
+                      'coq-load-project-file
+                      nil t)))
 
 ; detecting coqtop args should happen at the last moment before
 ; calling the process. In particular it should ahppen after that
 ; proof-prog-name-ask is performed, this hook is at the right place.
 (add-hook 'proof-shell-before-process-hook
-          '(lambda ()
-             ;; It seems coq-prog-name and proof-prog-name are not correctly linked
-             ;; so let us make sure they are the same before computing options
-             (setq coq-prog-name proof-prog-name)
-             (setq coq-prog-args (coq-prog-args))))
+          (lambda ()
+            ;; It seems coq-prog-name and proof-prog-name are not correctly linked
+            ;; so let us make sure they are the same before computing options
+            (setq coq-prog-name proof-prog-name)
+            (setq coq-prog-args (coq-prog-args))))
 
 ;; smie's parenthesis blinking is too slow, let us have the default one back
 (add-hook 'coq-mode-hook
-          '(lambda ()
-             (when (and (fboundp 'show-paren--default)
-                        (boundp 'show-paren-data-function))
-               (setq show-paren-data-function 'show-paren--default))))
+          (lambda ()
+            (when (and (fboundp 'show-paren--default)
+                       (boundp 'show-paren-data-function))
+              (setq show-paren-data-function 'show-paren--default))))
 
 
 

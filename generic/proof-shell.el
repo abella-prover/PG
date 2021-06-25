@@ -85,12 +85,29 @@ bother the user.  They may include
   'no-error-display         do not display errors/take error action
   'no-goals-display         do not goals in *goals* buffer
   'proof-tree-show-subgoal  item inserted by the proof-tree package
+  'priority-action          item added via proof-add-to-priority-queue
 
 Note that 'invisible does not imply any of the others. If flags
 are non-empty, interactive cues will be surpressed. (E.g.,
 printing hints).
 
 See the functions `proof-start-queue' and `proof-shell-exec-loop'.")
+
+(defvar proof-priority-action-list nil
+  "Holds action items to be inserted at the head of `proof-action-list' ASAP.
+When the proof assistant is busy, one cannot push to the head of
+`proof-action-list`, because the head usually (but not always)
+contains the item that the proof assistant is currently
+executing. This list therefore holds the items to be executed
+before any other items in `proof-action-list'. Inside
+`proof-shell-exec-loop', when `proof-action-list' is in the right
+state, the content of this list is prepended to
+`proof-action-list'. Use `proof-add-to-priority-queue' to add
+items to this priority list, to ensure the proof assistant starts
+running, in case `proof-action-list' is currently empty.
+
+The items in this list are reversed, that is, the one added last
+and to be executed last is at the head.")
 
 (defsubst proof-shell-invoke-callback (listitem)
   "From `proof-action-list' LISTITEM, invoke the callback on the span."
@@ -243,6 +260,7 @@ If QUEUEMODE is supplied, set the lock to that value."
   (setq proof-shell-interrupt-pending nil
 	proof-shell-busy (or queuemode t)
 	proof-shell-last-queuemode proof-shell-busy)
+  (run-hooks 'proof-state-change-pre-hook)
   (run-hooks 'proof-state-change-hook))
 
 (defun proof-release-lock ()
@@ -1062,6 +1080,37 @@ being processed."
       ;; nothing to do: maybe we completed a list of comments without sending them
 	(proof-detach-queue)))))
 
+(defun proof-start-prover-with-priority-items-maybe ()
+  "Start processing priority items if necessary.
+If there are priority items and the proof shell is not busy with
+other items, then this function starts the prover with the
+priority items. This function relies on the invariants of
+`proof-shell-filter-active' and on `proof-action-list'. The
+latter is non-empty, if there is some item, which has not been
+fully processed yet.
+
+Note that inside `proof-shell-exec-loop' the priority items are
+processed without calling this function."
+  (when (and proof-priority-action-list
+             (null proof-action-list) (not proof-shell-filter-active))
+    ;; not sure how fast we end up in proof-shell-exec-loop, better to clear
+    ;; proof-priority-action-list here before calling proof-add-to-queue
+    (let ((copy proof-priority-action-list))
+      (setq proof-priority-action-list nil)
+      ;; add to queue with the right mode - simply use the current mode
+      (proof-add-to-queue (nreverse copy) proof-shell-busy))))
+
+(defun proof-add-to-priority-queue (queueitem)
+  "Add item to `proof-priority-action-list' and start the queue if necessary.
+Argument QUEUEITEM must be an action item as documented for
+`proof-action-list'. Add flag 'priority-action to QUEUEITEM, such
+that priority items can be recognized and the order of added
+priority items can be preserved."
+  (let ((qi (list (car queueitem) (cadr queueitem) (caddr queueitem)
+                  (cons 'priority-action (cadddr queueitem)))))
+    (push qi proof-priority-action-list)
+    (proof-start-prover-with-priority-items-maybe)))
+
 
 ;;;###autoload
 (defun proof-start-queue (start end queueitems &optional queuemode)
@@ -1139,12 +1188,12 @@ contains only invisible elements for Prooftree synchronization."
                    (not (memq 'empty-action-list flags))
                    proof-shell-empty-action-list-command)
           (let* ((cmd (mapconcat 'identity (nth 1 item) " "))
-                (extra-cmds (apply proof-shell-empty-action-list-command (list cmd)))
-                ;; tag all new items with 'empty-action-list
-                (extra-items (mapcar (lambda (s) (proof-shell-action-list-item
-                                                  s 'proof-done-invisible
-                                                  (list 'invisible 'empty-action-list)))
-                                     extra-cmds)))
+                 (extra-cmds (apply proof-shell-empty-action-list-command (list cmd)))
+                 ;; tag all new items with 'empty-action-list
+                 (extra-items (mapcar (lambda (s) (proof-shell-action-list-item
+                                                   s 'proof-done-invisible
+                                                   (list 'invisible 'empty-action-list)))
+                                      extra-cmds)))
             ;; action-list should be empty at this point
             (setq proof-action-list (append extra-items proof-action-list))))
 
@@ -1157,6 +1206,21 @@ contains only invisible elements for Prooftree synchronization."
 	;; Show actions at the front of proof-action-list.
 	(if proof-tree-external-display
 	    (proof-tree-urgent-action flags))
+
+        ;; Add priority actions to the front of proof-action-list.
+        ;; Delay adding of priority items until there is no priority
+        ;; item at the head of `proof-action-list', such that more
+        ;; recently added priority items cannot overtake older items
+        ;; that wait in `proof-action-list'.
+        (when
+            (and proof-priority-action-list
+                 (or (null proof-action-list)
+                     (not (member 'priority-action
+                                  (nth 3 (car proof-action-list))))))
+          (setq proof-action-list
+                (nconc (nreverse proof-priority-action-list)
+                       proof-action-list))
+          (setq proof-priority-action-list nil))
 
 	;; if action list is (nearly) empty, ensure prover is noisy.
 	(if (and proof-shell-silent
@@ -1189,11 +1253,16 @@ contains only invisible elements for Prooftree synchronization."
 	    (pg-processing-complete-hint))
 	  (pg-finish-tracing-display))
 
-	(and (not proof-second-action-list-active)
-	     (or (null proof-action-list)
-		 (cl-every
-		  (lambda (item) (memq 'proof-tree-show-subgoal (nth 3 item)))
-		  proof-action-list)))))))
+	(and (not proof-second-action-list-active) 
+	     (let ((last-command  (car (nth 1 (car (last proof-action-list))))))
+	       (or (null proof-action-list)
+	 	   (cl-every
+	 	    (lambda (item) (memq 'proof-tree-show-subgoal (nth 3 item)))
+	 	    proof-action-list)
+	 	   ;; If the last command in proof-action-list is a "Show Proof" form then return t
+	 	   (when last-command
+             (proof-shell-string-match-safe
+              proof-show-proof-diffs-regexp last-command)))))))))
 
 
 (defun proof-shell-insert-loopback-cmd  (cmd)
@@ -1251,9 +1320,6 @@ ends with text matching `proof-shell-eager-annotation-end'."
 
    ((proof-looking-at-safe proof-shell-clear-goals-regexp)
     (proof-clean-buffer proof-goals-buffer))
-
-   ((proof-looking-at-safe proof-shell-set-elisp-variable-regexp)
-    (proof-shell-process-urgent-message-elisp))
 
    ((proof-looking-at-safe proof-shell-match-pgip-cmd)
     (pg-pgip-process-packet
@@ -1387,7 +1453,7 @@ to `proof-register-possibly-new-processed-file'."
   "Wrapper for `proof-shell-filter', protecting against parallel calls.
 In Emacs a process filter function can be called while the same
 filter is currently running for the same process, for instance,
-when the filter bocks on I/O. This wrapper protects the main
+when the filter blocks on I/O. This wrapper protects the main
 entry point, `proof-shell-filter' against such parallel,
 overlapping calls.
 
@@ -1412,7 +1478,10 @@ calls."
 	   (setq proof-shell-filter-active nil
 		 proof-shell-filter-was-blocked nil)
 	   (signal (car err) (cdr err))))
-	(setq call-proof-shell-filter proof-shell-filter-was-blocked)))))
+	(setq call-proof-shell-filter proof-shell-filter-was-blocked)))
+    ;; finally leaving proof-shell-filter - maybe somebody has added
+    ;; priority items inside proof-shell-filter?
+    (proof-start-prover-with-priority-items-maybe)))
 
 
 (defun proof-shell-filter ()
@@ -1833,6 +1902,7 @@ If TIMEOUTSECS is a number, time out after that many seconds."
 (defun proof-done-invisible (span)
   "Callback for ‘proof-shell-invisible-command’.
 Call ‘proof-state-change-hook’."
+  (run-hooks 'proof-state-change-pre-hook)
   (run-hooks 'proof-state-change-hook))
 
 ;;;###autoload

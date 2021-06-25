@@ -91,9 +91,23 @@ These are appended at the end of `coq-shell-init-cmd'."
 ;; Default coq is only Private_ and _subproof
 (defcustom coq-search-blacklist-string ; add this? \"_ind\" \"_rect\" \"_rec\"
  "\"Private_\" \"_subproof\""
-  "String for blacklisting strings from requests to Coq environment."
+  "Initial strings to blacklist in requests to Coq environment.
+If you are setting this via emacs cutomization menus, you should
+restart Coq to see the effect. To change blacklist during a coq
+development, please use \\[coq-change-search-blacklist-interactive]
+instead (or menu: Coq/Settings/Search Blacklist)."
   :type 'string
   :group 'coq)
+
+;; Coq has no command to overwrite the current blacklist, only to add or remove
+;; particular strings. To provide the overwrite feature to the user we thus need
+;; to know the current value of blacklist to first remove everything, then add
+;; the new values.
+;;; TODO: retrieve the value from coq itself and remove this variable?
+(defvar coq-search-blacklist-current-string coq-search-blacklist-string
+  "Current value of Coq Search Blacklist.
+This may become desynchronized with Coq if you use the command
+\"Add/Remove Search Blacklist\" in you script." )
 
 (defcustom coq-prefer-top-of-conclusion nil
   "Prefer start of the conclusion over its end when displaying large goals.
@@ -101,16 +115,16 @@ Namely, goals that do not fit in the goals window."
   :type 'boolean
   :group 'coq)
 
-;; this remembers the previous value of coq-search-blacklist-string, so that we
-;; can cook a remove+add blacklist command each time the variable is changed.
-;; initially we put it at current value of coq-search-blacklist-string.
-(defvar coq-search-blacklist-string-prev coq-search-blacklist-string)
 
-;TODO: remove Set Undo xx. It is obsolete since coq-8.5 at least.
-;;`(,(format "Set Undo %s . " coq-default-undo-limit) "Set Printing Width 75.")
 (defconst coq-shell-init-cmd
-  (append `(,(format "Add Search Blacklist %s. " coq-search-blacklist-string)) coq-user-init-cmd)
- "Command to initialize the Coq Proof Assistant.")
+  (append
+   `(
+     ;; Should this variable be buffer-local? No opinion on that but if yes we
+     ;; should re-intialize to coq-search-blacklist-string instead of
+     ;; keeping the current value (that may come from another file).
+     ,(format "Add Search Blacklist %s. " coq-search-blacklist-current-string))
+   '("Set Suggest Proof Using. ") coq-user-init-cmd)
+  "Command to initialize the Coq Proof Assistant.")
 
 
 (require 'coq-syntax)
@@ -134,11 +148,11 @@ Namely, goals that do not fit in the goals window."
 ;;  "Add LoadPath \"%s\"." ;; fixes unadorned Require (if .vo exists).
   "*Command of the inferior process to change the directory.")
 
-(defvar coq-shell-proof-completed-regexp "No\\s-+more\\s-+subgoals\\.\\|Subtree\\s-proved!\\|Proof\\s-completed"; \\|This subproof is complete
+(defvar coq-shell-proof-completed-regexp "No\\s-+more\\s-+\\(?:sub\\)?goals\\.\\|Subtree\\s-proved!\\|Proof\\s-completed"; \\|This subproof is complete
   "*Regular expression indicating that the proof has been completed.")
 
 (defvar coq-goal-regexp
-  "\\(============================\\)\\|\\(subgoal [0-9]+\\)\n")
+  "\\(============================\\)\\|\\(\\(?:sub\\)?goal [0-9]+\\)\n")
 
 
 (defconst coq-interrupt-regexp "User Interrupt."
@@ -152,11 +166,21 @@ A setting of nil means show all output from Coq.  See also option
   :group 'coq)
 
 (defcustom coq-end-goals-regexp-hide-subgoals
-  (concat "\\(\nsubgoal 2 \\)\\|\\(" coq-end-goals-regexp-show-subgoals "\\)")
+  (concat "\\(\n\\(?:sub\\)?goal 2 \\)\\|\\(" coq-end-goals-regexp-show-subgoals "\\)")
   "Regexp for `proof-shell-end-goals-regexp' when hiding additional subgoals.
 See also option `coq-hide-additional-subgoals'."
   :type '(choice regexp (const nil))
   :group 'coq)
+
+(defcustom coq-show-proof-stepwise nil
+  "Display the proof terms stepwise in the *response* buffer.
+This option can be combined with option `coq-diffs'.
+It is mostly useful in three window mode, see also
+`proof-three-window-mode-policy' for details."
+
+  :type 'boolean
+  :safe 'booleanp
+  :group 'coq-auto-compile)
 
 ;;
 ;; prooftree customization
@@ -200,9 +224,9 @@ See also option `coq-hide-additional-subgoals'."
   :group 'coq-proof-tree)
 
 (defcustom coq-proof-tree-current-goal-regexp
-  (concat "^[0-9]+ \\(?:focused \\)?subgoal\\(?:s\\)?\\s-*"
+  (concat "^[0-9]+ \\(?:focused \\)?\\(?:sub\\)?goal\\(?:s\\)?\\s-*"
           "\\(?:(\\(?:unfocused: [-0-9]+\\)?,?"
-          "\\s-*\\(?:shelved: [-0-9]+\\)?)\\)?\\(?:\\s-*, subgoal 1\\)? "
+          "\\s-*\\(?:shelved: [-0-9]+\\)?)\\)?\\(?:\\s-*, \\(?:sub\\)?goal 1\\)? "
           "(ID \\([0-9]+\\))\n\\s-*\n\\(\\(?: .*\n\\)+\\)\\(?:\n\\|$\\)")
   "Regexp for `proof-tree-current-goal-regexp'."
   :type 'regexp
@@ -216,7 +240,7 @@ See also option `coq-hide-additional-subgoals'."
   :group 'coq-proof-tree)
 
 (defcustom coq-proof-tree-additional-subgoal-ID-regexp
-  "^subgoal [0-9]+ (ID \\([0-9]+\\)) is:"
+  "^\\(?:sub\\)?goal [0-9]+ (ID \\([0-9]+\\)) is:"
   "Regexp for `proof-tree-additional-subgoal-ID-regexp'."
   :type 'regexp
   :group 'coq-proof-tree)
@@ -257,8 +281,8 @@ See also option `coq-hide-additional-subgoals'."
 ;; <infomsg>All the remaining goals are on the shelf.</infomsg>
 (defcustom coq-proof-tree-branch-finished-regexp
   (concat "^\\(\\(?:Proof completed\\.\\)\\|"
-          "\\(?:\\(?:<infomsg>\\)?No more subgoals\\)\\|"
-          "\\(No more subgoals but non-instantiated "
+          "\\(?:\\(?:<infomsg>\\)?No more \\(?:sub\\)?goals\\)\\|"
+          "\\(No more \\(?:sub\\)?goals but non-instantiated "
           "existential variables:\\)\\|"
           "\\(?:<infomsg>All the remaining goals are on the shelf\\)\\|"
           "\\(<infomsg>\\s-*This subproof is complete, but there are "
@@ -445,20 +469,6 @@ This is a subroutine of `proof-shell-filter'."
     (pg-response-display-with-face strnotrailingspace))) ; face
 
 
-;; Trying to accept { and } as terminator for empty commands. Actually
-;; I am experimenting two new commands "{" and "}" (without no
-;; trailing ".") which behave like BeginSubProof and EndSubproof. The
-;; absence of a trailing "." makes it difficult to distinguish between
-;; "{" of normal coq code (implicits, records) and this the new
-;; commands. We therefore define a coq-script-parse-function to this
-;; purpose.
-
-;; coq-end-command-regexp is ni coq-indent.el
-(defconst coq-script-command-end-regexp coq-end-command-regexp)
-;;        "\\(?:[^.]\\|\\(?:\\.\\.\\)\\)\\.\\(\\s-\\|\\'\\)")
-
-
-
 ;; slight modification of proof-script-generic-parse-cmdend (one of the
 ;; candidate for proof-script-parse-function), to allow "{" and "}" to be
 ;; command terminator when the command is empty. TO PLUG: swith the comment
@@ -612,6 +622,11 @@ and read by function `coq-empty-action-list-command'.")
 
 ;;TODO update docstring and comment
 
+(defun coq-open-goals-p ()
+  "Return non nil if we are inside a proof, see `proof-shell-open-goals-p'."
+  (car (cdr (cdr (coq-last-prompt-info-safe)))))
+
+
 (defun coq-set-state-infos ()
   "Set the last locked span's state number to the number found last time.
 This number is in the *last but one* prompt (variable `coq-last-but-one-statenum').
@@ -654,7 +669,7 @@ If locked span already has a state number, then do nothing. Also updates
 ;; This hook seems the one we want.
 ;; WARNING! It is applied once after each command PLUS once before a group of
 ;; commands is started
-(add-hook 'proof-state-change-hook #'coq-set-state-infos)
+(add-hook 'proof-state-change-pre-hook #'coq-set-state-infos)
 
 
 (defun count-not-intersection (l notin)
@@ -715,7 +730,7 @@ If locked span already has a state number, then do nothing. Also updates
    ((looking-at "============================\n")
     (goto-char (match-end 0))
     (cons 'goal (int-to-string coq-current-goal)))
-   ((looking-at "subgoal \\([0-9]+\\) is:\n")
+   ((looking-at "\\(?:sub\\)?goal \\([0-9]+\\) is:\n")
     (goto-char (match-end 0))
     (cons 'goal (match-string 1))       ;FIXME: This is dead-code!?  --Stef
     (setq coq-current-goal (string-to-number (match-string 1))))
@@ -1005,16 +1020,9 @@ This is specific to `coq-mode'."
    "SearchPattern (parenthesis mandatory), ex: (?X1 + _ = _ + ?X1)"
    "SearchPattern" nil))
 
-(defun coq-SearchConstant ()
-  (interactive)
-  (coq-ask-do "Search constant" "Search"))
-
 (defun coq-SearchRewrite ()
   (interactive)
   (coq-ask-do "SearchRewrite" "SearchRewrite" nil))
-
-
-
 
 (defun coq-Print (withprintingall)
   "Ask for an ident and print the corresponding term.
@@ -1199,7 +1207,9 @@ Printing All set."
   "Return the list of commands to send to Coq after CMD
 if it is the last command of the action list.
 If CMD is tagged with 'empty-action-list then this function won't
-be called and no command will be sent to Coq."
+be called and no command will be sent to Coq.
+Note: the last command added if `coq-show-proof-stepwise' is set
+should match the `coq-show-proof-diffs-regexp'."
   (cond
    ((or
      ;; If closing a nested proof, Show the enclosing goal.
@@ -1208,21 +1218,56 @@ be called and no command will be sent to Coq."
      ;; If user issued a printing option then t printing.
      (and (string-match-p "\\(S\\|Uns\\)et\\s-+Printing" cmd)
           (> (length coq-last-but-one-proofstack) 0)))
-    (list "Show."))
+    (let ((showlist (list "Show.")))
+      (when coq-show-proof-stepwise
+        (add-to-list 'showlist
+                     (if (coq--post-v811) 
+                     (or
+                      (when (eq coq-diffs 'off) "Show Proof.")
+                      (when (eq coq-diffs 'on) "Show Proof Diffs.")
+                      (when (eq coq-diffs 'removed) "Show Proof Diffs removed."))
+                     "Show Proof.")
+                     t))
+      showlist))
+   
    ((or
      ;; If we go back in the buffer and the number of abort is less than
      ;; the number of nested goals, then Unset Silent and Show the goal
      (and (string-match-p "BackTo\\s-" cmd)
           (> (length coq-last-but-one-proofstack) coq--retract-naborts)))
-    ;; "Set Diffs" always re-prints the proof context with (if enabled) diffs
-    (list "Unset Silent." (if (coq--post-v810) (coq-diffs) "Show.")))
+    (let ((showlist (list "Unset Silent." (if (coq--post-v810) (coq-diffs) "Show."))))
+      (when coq-show-proof-stepwise
+        (add-to-list 'showlist
+                     (if (coq--post-v811) 
+                     (or
+                      (when (eq coq-diffs 'off) "Show Proof.")
+                      (when (eq coq-diffs 'on) "Show Proof Diffs." )
+                      (when (eq coq-diffs 'removed) "Show Proof Diffs removed."))
+                     "Show Proof.")
+                     t))
+      showlist))
+
    ((or
      ;; If we go back in the buffer and not in the above case, then only Unset
      ;; silent (there is no goal to show). Still, we need to "Set Diffs" again
      (string-match-p "BackTo\\s-" cmd))
     (if (coq--post-v810)
-        (list "Unset Silent." (coq-diffs))
-      (list "Unset Silent.")))))
+        (list "Unset Silent." (coq-diffs) )
+      (list "Unset Silent.")))
+   ((or
+     ;; If starting a proof, Show Proof if need be
+     (coq-goal-command-str-p cmd)
+     ;; If doing (not closing) a proof, Show Proof if need be
+     (and (not (string-match-p coq-save-command-regexp-strict cmd))
+          (> (length coq-last-but-one-proofstack) 0)))
+    (when coq-show-proof-stepwise
+      (if (coq--post-v811) 
+      (or
+       (when (eq coq-diffs 'off) (list "Show Proof." ))
+       (when (eq coq-diffs 'on) (list "Show Proof Diffs."))
+       (when (eq coq-diffs 'removed) (list "Show Proof Diffs removed.")))
+       (list "Show Proof."))))))
+
 
 (defpacustom auto-adapt-printing-width t
   "If non-nil, adapt automatically printing width of goals window.
@@ -1372,13 +1417,13 @@ Maintained by a hook in `proof-shell-handle-delayed-output-hook'.")
   (propertize
    "-"
    'face 'coq-button-face
-   'mouse-face 'coq-button-face-pressed))
+   'mouse-face 'coq-button-face-active))
 
 (defun coq-hypcross-folded-string()
   (propertize
    "+"
-   'face 'coq-button-face
-   'mouse-face 'coq-button-face-pressed))
+   'face 'coq-button-face-pressed
+   'mouse-face 'coq-button-face-active))
 
 ;; hypcross is displayerd with a "-" when unfolded and a "+" when unfolded.
 ;; It is highlighted when hovered, is clickable and have a special
@@ -1399,7 +1444,7 @@ Maintained by a hook in `proof-shell-handle-delayed-output-hook'.")
       ;(overlay-put ov 'width .6)
       ;(overlay-put ov 'height -1)
       (when (eq coq-hypcross-hovering-help t)
-        (overlay-put ov 'help-echo "mouse-3: unfold; mouse-2 copy name")))
+        (overlay-put ov 'help-echo "MOUSE-1: (un)fold ; MOUSE-2 copy hyp name at point")))
     ov))
 
 ;; Once we have created the 3 overlays, each recieves a reference to the 2
@@ -1487,7 +1532,7 @@ fold/unfold cross.  Return the list of mappings hypname -> overlays."
 ;; Feature: highlighting of hypothesis that remains when the script is played
 ;; (and goals buffer is updated).
 
-;; On by default. This only works with the SearchAbout function for now.
+;; On by default. This only works with the Search function for now.
 (defvar coq-highlight-hyps-cited-in-response t
   "If non-nil, try to highlight in goals buffers hyps cited in response.")
 
@@ -1559,7 +1604,7 @@ of hypothesis to highlight."
 
 (defun coq-get-hyps-cited-in-response ()
   "Returns locations of hyps in goals buffer that are cited in response buffer.
-See `coq-highlight-hyps-cited-in-response' and `SearchAbout'."
+See `coq-highlight-hyps-cited-in-response' and `Search'."
   (let* ((hyps-cited-pos (coq-detect-hyps-positions proof-response-buffer))
          (hyps-cited (coq-build-hyps-names hyps-cited-pos)))
     (cl-remove-if-not
@@ -1660,7 +1705,7 @@ Used on hyptohesis overlays in goals buffer mainly."
        )
       (overlay-put hyp-overlay 'evaporate t)
       (overlay-put hyp-overlay 'mouse-face 'proof-command-mouse-highlight-face)
-      (overlay-put hyp-overlay 'help-echo "mouse-3: unfold; mouse-2 copy name")
+      (overlay-put hyp-overlay 'help-echo "MOUSE-1: unfold; MOUSE-2 copy name at point")
       (overlay-put hyp-overlay 'hyp-name h)
       (overlay-put hyp-overlay 'keymap coq-hidden-hyp-map)
       (overlay-put hypcross-ov 'display (coq-hypcross-folded-string)))))
@@ -1866,7 +1911,8 @@ at `proof-assistant-settings-cmds' evaluation time.")
   ;; coq-mode colorize errors better than the generic mechanism
   (setq proof-script-color-error-messages nil)
   (setq proof-terminal-string ".")
-  (setq proof-script-command-end-regexp coq-script-command-end-regexp)
+  ;; superseded by coq-script-parse-function
+  ;;(setq proof-script-command-end-regexp coq-script-command-end-regexp)
   (setq proof-script-parse-function 'coq-script-parse-function)
   (setq proof-script-comment-start comment-start)
   (setq proof-script-comment-end comment-end)
@@ -1890,6 +1936,8 @@ at `proof-assistant-settings-cmds' evaluation time.")
         proof-save-command "Save %s. "
         proof-find-theorems-command "Search %s. ")
 
+  (setq proof-show-proof-diffs-regexp coq-show-proof-diffs-regexp)
+
   (setq proof-shell-empty-action-list-command 'coq-empty-action-list-command)
 
 ;; FIXME da: Does Coq have a help or about command?
@@ -1902,6 +1950,7 @@ at `proof-assistant-settings-cmds' evaluation time.")
           coq-compile-auto-save coq-lock-ancestors coq-diffs))
 
   (setq proof-goal-command-p #'coq-goal-command-p
+        proof-shell-last-cmd-left-goals-p #'coq-open-goals-p
         proof-find-and-forget-fn #'coq-find-and-forget
         pg-topterm-goalhyplit-fn #'coq-goal-hyp
         proof-state-preserving-p #'coq-state-preserving-p)
@@ -1930,6 +1979,14 @@ at `proof-assistant-settings-cmds' evaluation time.")
    proof-tree-find-begin-of-unfinished-proof
      'coq-find-begin-of-unfinished-proof)
 
+  ;; proof-omit-proofs config
+  (setq
+   proof-omit-proofs-configured t
+   proof-script-proof-start-regexp coq-proof-start-regexp
+   proof-script-proof-end-regexp coq-proof-end-regexp
+   proof-script-definition-end-regexp coq-definition-end-regexp
+   proof-script-proof-admit-command coq-omit-proof-admit-command)
+
   (setq proof-cannot-reopen-processed-files nil)
 
   (proof-config-done)
@@ -1944,6 +2001,7 @@ at `proof-assistant-settings-cmds' evaluation time.")
    proof-shell-error-regexp coq-error-regexp
    proof-shell-interrupt-regexp coq-interrupt-regexp
    proof-shell-assumption-regexp coq-id
+   proof-shell-theorem-dependency-list-regexp coq-shell-theorem-dependency-list-regexp
    pg-subterm-first-special-char ?\360
    ;; The next three represent path annotation information
    pg-subterm-start-char ?\372          ; not done
@@ -1968,7 +2026,7 @@ at `proof-assistant-settings-cmds' evaluation time.")
    proof-shell-result-end "\372 End Pbp result \373"
 
 ;   proof-shell-start-goals-regexp          "^\\(?:(dependent evars:[^)]*)\\s-+\\)?[0-9]+\\(?: focused\\)? subgoals?"
-   proof-shell-start-goals-regexp          "[0-9]+\\(?: focused\\)? subgoals?"
+   proof-shell-start-goals-regexp          "[0-9]+\\(?: focused\\)? \\(?:sub\\)?goals?"
    proof-shell-end-goals-regexp
    (if coq-hide-additional-subgoals
        (setq proof-shell-end-goals-regexp coq-end-goals-regexp-hide-subgoals)
@@ -1978,6 +2036,8 @@ at `proof-assistant-settings-cmds' evaluation time.")
 
    proof-no-fully-processed-buffer t
 
+   proof-dependency-menu-system-specific coq-dependency-menu-system-specific
+   proof-dependencies-system-specific coq-dependencies-system-specific
    ;; Coq has no global settings?
    ;; (proof-assistant-settings-cmd)
 
@@ -2113,22 +2173,33 @@ Set Diffs setting if Coq is running and has a version >= 8.10."
 ;;  :type 'integer
 ;;  :setting "Set Undo %i . ")
 
-(defun coq-set-search-blacklist (s)
-  (let ((res (format "Remove Search Blacklist %s. \nAdd Search Blacklist %s. "
-          coq-search-blacklist-string-prev s)))
-    (setq coq-search-blacklist-string-prev coq-search-blacklist-string)
-    res))
+;; Problem if the Remove or Add fails we leave Coq's blacklist in a strange
+;; state: unnoticed by the user, and desynched from
+;; coq-search-blacklist-current-string.
+;; TODO: have a way to detect error and re-set old value.
+(defun coq-change-search-blacklist (s)
+  (let* ((cmd-clean (list (format "Remove Search Blacklist %s."
+                                  coq-search-blacklist-current-string)))
+         (item-clean `(nil ,cmd-clean proof-done-invisible 'invisible))
+         (cmd-set (list (format "Add Search Blacklist %s." s)))
+         (item-set `(nil ,cmd-set proof-done-invisible 'invisible)))
+  (proof-add-to-queue `(,item-clean ,item-set) 'advancing)))
 
+(defun coq-change-search-blacklist-interactive ()
+  (interactive)
+  (proof-shell-ready-prover)
+  (let* ((current-value coq-search-blacklist-current-string)
+         (s (read-string
+             "Set search blacklist to: "
+             current-value 'proof-minibuffer-history)))
+    (coq-change-search-blacklist s)
+    (setq coq-search-blacklist-current-string s)))
 
-(defun coq-get-search-blacklist (s)
-  coq-search-blacklist-string)
-
-
-(defpacustom search-blacklist coq-search-blacklist-string
-  "Strings to blacklist in requests to Coq environment."
-  :type 'string
-  :get 'coq-get-search-blacklist
-  :setting coq-set-search-blacklist)
+;; (defpacustom search-blacklist coq-search-blacklist-string
+;;   "Strings to blacklist in requests to Coq environment."
+;;   :type 'string
+;;   :get 'coq-get-search-blacklist
+;;   :setting coq-set-search-blacklist)
 
 
 (defpacustom time-commands nil
@@ -2509,17 +2580,21 @@ mouse activation."
           (progn (end-of-line) (point)))))))
       (insert (concat "End" section)))))
 
+
 (defun coq--format-intros (output)
-  "Create an “intros” form from the OUTPUT of “Show Intros”."
-  (let* ((shints1 (replace-regexp-in-string "^[0-9] subgoal\\(.\\|\n\\|\r\\)*"  "" output))
+  "Create an “intros” or ”move” form from the OUTPUT of “Show Intros”."
+  (let* ((shints1 (replace-regexp-in-string "^[0-9] \\(?:sub\\)?goal\\(.\\|\n\\|\r\\)*"  "" output))
          (shints (replace-regexp-in-string "[\r\n ]*\\'" "" shints1)))
     (if (or (string= "" shints)
             (string-match coq-error-regexp shints))
         (error "Don't know what to intro")
-      (format "intros %s" shints))))
+      (save-excursion
+        (if (re-search-backward "Require.*ssreflect" nil t)
+            (format "move=> %s" shints)
+          (format "intros %s" shints))))))
 
 (defun coq-insert-intros ()
-  "Insert an intros command with names given by Show Intros.
+  "Insert an intros or move command with names given by Show Intros.
 Based on idea mentioned in Coq reference manual."
   (interactive)
   (let* ((output (proof-shell-invisible-cmd-get-result "Show Intros.")))
@@ -2562,6 +2637,169 @@ Warning: this makes the error messages (and location) wrong.")
 (defun coq-tactic-already-has-an-as-close(s)
   "Return t if the last tactic of locked region contains an \"as\" close."
   (save-excursion (string-match "\\<as\\>" s)))
+
+;::::::::::::: inserting suggested Proof using XXX... ;;;;;;;;;;
+;; global mechanism:
+
+;; When some dependency oinformation is detected (see
+;; `coq-shell-theorem-dependency-list-regexp') a hook is triggered by pg. We
+;; configure this hook to perform the following: if the user set
+;; `coq-accept-proof-using-suggestion' to 'always, then perform the insertion
+;; immediately via using `coq-insert-proof-using', otherwise add the menu entry
+;; to make it later (actually the current impolementation always adds the menu
+;; entry, which is wrong because the span is not there if the insertion was
+;; already performed.).
+
+
+;; This variable is used by generic pg code. Every time this is detected in the
+;; output, it sets the `proof-last-theorem-dependencies' variable. Substring 1
+;; should contain the name of the theorem, and substring 2 should contain its
+;; dependencies. The content of `proof-last-theorem-dependencies' is then used
+;; by pg generic code to trigger `proof-depends-process-dependencies', which
+;; itself sets the 'dependencies property of the span, and calls
+;; `proof-dependencies-system-specific'. The latter is bound to
+;; `coq-dependencies-system-specific' below.
+(setq coq-shell-theorem-dependency-list-regexp
+  "<infomsg>\n?The proof of \\(?1:[^ \n]+\\)\\(?: \\|\n\\)should start with one of the following commands:\\(?: \\|\n\\)Proof using\\(?2:[^.]*\\)\\.")
+
+(defcustom coq-accept-proof-using-suggestion 'highlight
+  "Whether and how proofgeneral should insert \"Proof using\" suggestions.
+Suggestions are emitted by Coq at Qed time. The possible values
+of this variable are:
+
+- 'always: always insert the suggested annotation
+
+- 'highlight (default value): highlight the Proof command and
+  have a contextual menu for insertion (or M-x
+  coq-insert-suggested-dependency when point is on the proof
+  considered)
+
+- 'ask: asks the user each time. If yes then do as 'always, else
+  do as 'highlight
+
+- 'never: ignore completely the suggestions.
+
+Remarks and limitations:
+- do not support nested proofs.
+- always use the *first* annotation suggested by coq.
+- the proof is not replayed, which is consistent with the fact
+  that pg currently do not deal with async proofs.
+- if there is already a \"Proof using\" annotation, then either it
+  is correct and nothing happens, or it is incorrect and coq
+  generates an error. PG won't try to replace the erroneous
+  annotation in this case, but you can always go back, remove it
+  by hand, and let pg insert the good one.
+- instead of the menu you can do M-x coq-insert-suggested-dependency
+  when point is on the proof considered.
+"
+  :type '(choice
+	  (const :tag "Ask user" ask)
+	  (const :tag "Always accept" always)
+	  (const :tag "Higihlight" never)
+	  (const :tag "Ignore completely" ignore)) 
+  :group 'coq)
+
+;; putting "Type" instead of nothing, otherwise Coq may fail if a "with"
+;; anotation is also present: (Proof using with auto raises an error in
+;; coq<=8.12 at least).
+(defun coq-hack-proofusing-suggestion (suggested)
+  (if (string-equal "" suggested) "Type" suggested))
+
+;; the additional menu for "proof using". highlights the "Proof." command, and
+;; have a entry to insert the annotation and remove the highlight.
+(defvar coq-dependency-menu-system-specific
+  (lambda (span)
+    (let* ((deps (span-property-safe span 'dependencies))
+           (specialspans (spans-at-region-prop (span-start span) (span-end span) 'proofusing))
+           (specialspan (and specialspans (not (cdr specialspans)) (car specialspans)))
+           (suggested (mapconcat 'identity deps " "))
+           (suggested (coq-hack-proofusing-suggestion suggested))
+           (name (concat " insert \"proof using " suggested "\""))
+           (fn `(lambda (sp)
+                 (coq-insert-proof-using-suggestion sp t)
+                 (and ,specialspan (span-delete ,specialspan)))))
+      (list "-------------" (vector name `(,fn ,span) t))))
+  "Coq specific additional menu entry for \"Proof using\".
+annotation. See `proof-dependency-menu-system-specific'." )
+
+(defconst coq-proof-using-regexp "\\_<Proof\\(?1:[^.]*\\)\\."
+  "Regexp matching Coq \"Proof ....\" annotation (with no \"using\" annotation).
+We suppose there is no \"using\" annotation, since Coq will fail
+in this case and no suggestion can be added without replaying the
+script. Actually the only possible content iafter Proof is a
+\"with annotation\".
+The substring matched numbered 1 must start at the possible
+insertion point for the \"using\" annotation. ")
+
+
+;; span is typically the whole theorem statement+proof span built after a save
+;; command
+(defun coq-highlight-span-dependencies (span suggested)
+  (goto-char (span-start span))
+  ; Search for the "Proof" command and build a hilighted span on it
+  (let* ((endpos (re-search-forward coq-proof-using-regexp))
+         (proof-pos (match-beginning 0))
+         (newspan (span-make proof-pos endpos)))
+    (span-set-property newspan 'face 'proof-warning-face)
+    (span-set-property newspan 'help-echo "Right click to insert \"proof using\"")
+    (span-set-property newspan 'proofusing t)))
+
+(defun coq-insert-proof-using (proof-pos previous-content insert-point string-suggested)
+  (goto-char insert-point)
+  (let ((spl proof-locked-span))
+    (span-read-write spl) ; temporarily make the locked span writable
+    (insert (concat " using " string-suggested))
+    (proof-span-read-only spl)))
+
+(defun coq-insert-suggested-dependency ()
+  (interactive)
+  (let* ((span (span-at (point) 'type))
+         (deps (span-property-safe span 'dependencies))
+         (specialspans (spans-at-region-prop (span-start span) (span-end span) 'proofusing))
+         (specialspan (and specialspans (not (cdr specialspans)) (car specialspans))))
+    (coq-insert-proof-using-suggestion span t)
+    (span-delete specialspan)))
+
+;; TODO: have 'ignoe option to completely ignore (not highlight)
+;; and have 'never renamed into 'highlight
+(defun coq-insert-proof-using-suggestion (span &optional force)
+  "Add the proof using annotation, respecting `coq-accept-proof-using-suggestion'.
+Insert \" using xxx\" After the \"Proof\" of SPAN, where xxx is
+built from the list of strings in SUGGESTED.
+SPAN is the span of the whole theorem (statement + proof)."
+  (with-current-buffer proof-script-buffer
+    (save-excursion
+      (goto-char (span-start span))
+      (let* ((endpos (re-search-forward coq-proof-using-regexp (span-end span) t)))
+        (when endpos
+          (let* ((suggested (span-property span 'dependencies))
+                 (proof-pos (match-beginning 0))
+                 (insert-point (match-beginning 1))
+                 (previous-string (match-string 1))
+                 (previous-content (split-string previous-string))
+                 (string-suggested (mapconcat 'identity suggested " "))
+                 (string-suggested (coq-hack-proofusing-suggestion string-suggested))
+                 ;; disabled for now it never happens because Coq would suggest anything?
+                 (same (and nil previous-content
+                            (not (cl-set-exclusive-or previous-content suggested
+                                                      :test 'string-equal))))
+                 (usersayyes
+                  (and (not same) (not force)
+                       (equal coq-accept-proof-using-suggestion 'ask)
+                       (y-or-n-p (concat "Update proof using annotation ("
+                                         string-suggested ")")))))
+            (unless same
+              (if (or force (equal coq-accept-proof-using-suggestion 'always) usersayyes)
+                  (coq-insert-proof-using proof-pos previous-content insert-point string-suggested)
+                (when (member coq-accept-proof-using-suggestion '(highlight ask))
+                  (coq-highlight-span-dependencies span string-suggested)
+                  (message "\"Proof using\" not set. M-x coq-insert-suggested-dependency or right click to add it. See also `coq-accept-proof-using-suggestion'."))))))))))
+
+(defvar coq-dependencies-system-specific
+  (lambda (span)
+    (coq-insert-proof-using-suggestion span))
+  "Coq specific dependency mechanism.
+Used for automatic insertion of \"Proof using\" annotations.")
 
 
 (defun coq-insert-as-in-next-command ()
@@ -2621,7 +2859,7 @@ Also insert holes at insertion positions."
     (setq cmd (read-string "Build match for type: "))
     (let* ((thematch
            (proof-shell-invisible-cmd-get-result (concat "Show Match " cmd ".")))
-           (match (replace-regexp-in-string "=> \n" "=> #\n" thematch)))
+           (match (replace-regexp-in-string "=> *\n" "=> #\n" thematch)))
       ;; if error, it will be displayed in response buffer (see def of
       ;; proof-shell-invisible-cmd-get-result), otherwise:
       (unless (proof-string-match coq-error-regexp match)
@@ -2678,21 +2916,20 @@ Completion is on a quasi-exhaustive list of Coq tacticals."
          "Set Printing All" q "Unset Printing All" nil "Test Printing All")
       (proof-shell-invisible-command q))))
 
-
-;; TODO SearchAbout become Search in v8.5, change when V8.4 becomes old.
-(defun coq-SearchAbout ()
+(defun coq-Search ()
   (interactive)
   (coq-ask-do
    ;; TODO: use [Add Search Blacklist "foo"] to exclude optionaly some patterns:
    ;;  "_ind" "_rec" "R_" "_equation"
-   "SearchAbout (ex: \"eq_\" eq -bool)"
-   "SearchAbout"
+   "Search (ex: \"eq_\" eq -bool)"
+   "Search"
    nil nil t)
   (when coq-highlight-hyps-cited-in-response
     (coq-highlight-hyps-cited-in-response)
     (message "M-x coq-unhighlight-selected-hyps to remove highlighting, [Coq/Settings/Search Blacklist] to change blacklisting."))
   (unless coq-highlight-hyps-cited-in-response
     (message "[Coq/Settings/Search Blacklist] to change blacklisting.")))
+
 
 ;; Insertion commands
 (define-key coq-keymap [(control ?i)] 'coq-insert-intros)
@@ -2717,7 +2954,7 @@ Completion is on a quasi-exhaustive list of Coq tacticals."
 (define-key coq-keymap [(control ?o)] 'coq-SearchIsos)
 (define-key coq-keymap [(control ?p)] 'coq-Print)
 (define-key coq-keymap [(control ?b)] 'coq-About)
-(define-key coq-keymap [(control ?a)] 'coq-SearchAbout)
+(define-key coq-keymap [(control ?a)] 'coq-Search)
 (define-key coq-keymap [(control ?c)] 'coq-Check)
 (define-key coq-keymap [?h] 'coq-PrintHint)
 (define-key coq-keymap [(control ?l)] 'coq-LocateConstant)
@@ -2734,7 +2971,7 @@ Completion is on a quasi-exhaustive list of Coq tacticals."
 (define-key coq-goals-mode-map [(control ?c)(control ?a)(control ?p)] 'coq-Print)
 (define-key coq-goals-mode-map [(control ?c)(control ?a)(control ?o)] 'coq-SearchIsos)
 (define-key coq-goals-mode-map [(control ?c)(control ?a)(control ?b)] 'coq-About)
-(define-key coq-goals-mode-map [(control ?c)(control ?a)(control ?a)] 'coq-SearchAbout)
+(define-key coq-goals-mode-map [(control ?c)(control ?a)(control ?a)] 'coq-Search)
 (define-key coq-goals-mode-map [(control ?c)(control ?a)(control ?s)] 'coq-Show)
 (define-key coq-goals-mode-map [(control ?c)(control ?a)?r] 'proof-store-response-win)
 (define-key coq-goals-mode-map [(control ?c)(control ?a)?g] 'proof-store-goals-win)
@@ -2754,7 +2991,7 @@ Completion is on a quasi-exhaustive list of Coq tacticals."
 (define-key coq-response-mode-map [(control ?c)(control ?a)(control ?p)] 'coq-Print)
 (define-key coq-response-mode-map [(control ?c)(control ?a)(control ?o)] 'coq-SearchIsos)
 (define-key coq-response-mode-map [(control ?c)(control ?a)(control ?b)] 'coq-About)
-(define-key coq-response-mode-map [(control ?c)(control ?a)(control ?a)] 'coq-SearchAbout)
+(define-key coq-response-mode-map [(control ?c)(control ?a)(control ?a)] 'coq-Search)
 (define-key coq-response-mode-map [(control ?c)(control ?a)(control ?s)] 'coq-Show)
 (define-key coq-response-mode-map [(control ?c)(control ?a)(control ?r)] 'proof-store-response-win)
 (define-key coq-response-mode-map [(control ?c)(control ?a)(control ?g)] 'proof-store-goals-win)
@@ -2793,18 +3030,20 @@ Completion is on a quasi-exhaustive list of Coq tacticals."
 ;; point.
 (when coq-hypname-map
   (define-key coq-hypname-map [(mouse-3)] 'coq-toggle-fold-hyp-at-mouse)
+  (define-key coq-hypcross-map [(return)] 'coq-toggle-fold-hyp-at-point)
   (define-key coq-hypname-map [(mouse-2)] 'coq-insert-at-point-hyp-at-mouse))
 
 ;; Default binding: clicking on the cross to folds/unfold hyp.
 ;; Click on it with button 2 copies the names at current point.
 (when coq-hypname-map
   (define-key coq-hypcross-map [(mouse-1)] 'coq-toggle-fold-hyp-at-mouse)
-  (define-key coq-hypcross-map [return] 'coq-toggle-fold-hyp-at-point)
+  (define-key coq-hypcross-map [(return)] 'coq-toggle-fold-hyp-at-point)
   (define-key coq-hypcross-map [(mouse-2)] 'coq-insert-at-point-hyp-at-mouse))
 ;; Ddefault binding: clicking on a hidden hyp with button 3 unfolds it, with
 ;; button 2 it copies hyp name at current point.
 (when coq-hidden-hyp-map
-  (define-key coq-hidden-hyp-map [(mouse-3)] 'coq-toggle-fold-hyp-at-mouse)
+  (define-key coq-hidden-hyp-map [(mouse-1)] 'coq-toggle-fold-hyp-at-mouse)
+  (define-key coq-hypcross-map [(return)] 'coq-toggle-fold-hyp-at-point)
   (define-key coq-hidden-hyp-map [(mouse-2)] 'coq-insert-at-point-hyp-at-mouse))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;
@@ -2953,7 +3192,7 @@ number of hypothesis displayed, without hiding the goal"
               (with-selected-window goal-win
                 ;; find snd goal or buffer end, if not found this goes to the
                 ;; end of buffer
-                (search-forward-regexp "subgoal 2\\|\\*\\*\\* Unfocused goals:\\|\\'")
+                (search-forward-regexp "\\(?:sub\\)?goal 2\\|\\*\\*\\* Unfocused goals:\\|\\'")
                 (beginning-of-line)
                 ;; find something backward else than a space: bottom of concl
                 (ignore-errors (search-backward-regexp "\\S-"))
@@ -2981,7 +3220,7 @@ number of hypothesis displayed, without hiding the goal"
   "Modify `minor-mode-alist' to display the number of subgoals in the modeline."
   (when (and proof-goals-buffer proof-script-buffer)
     (let ((nbgoals (with-current-buffer proof-goals-buffer
-                     (string-to-number (coq-first-word-before "focused\\|subgoal"))))
+                     (string-to-number (coq-first-word-before "focused\\|\\(?:sub\\)?goal"))))
           (nbunfocused (with-current-buffer proof-goals-buffer
                          (coq-get-from-to-paren "unfocused: "))))
       (with-current-buffer proof-script-buffer

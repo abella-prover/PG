@@ -399,6 +399,11 @@ NB: This setting is not used for matching output from the prover."
   :type 'regexp
   :group 'proof-script)
 
+(defcustom proof-show-proof-diffs-regexp nil
+  "Matches all \"Show Proof\" forms (specific to the Coq prover)." 
+  :type 'regexp
+  :group 'proof-script)
+
 (defcustom proof-save-with-hole-regexp nil
   "Regexp which matches a command to save a named theorem.
 The name of the theorem is built from the variable
@@ -441,10 +446,10 @@ It's safe to leave this setting as nil."
   :group 'proof-script)
 
 (defcustom proof-goal-with-hole-result 2
-  "How to get theorem name after ‘proof-goal-with-hole-regexp’ match.
+  "How to get theorem name after `proof-goal-with-hole-regexp' match.
 String or Int.
-If an int N, use ‘match-string’ to get the value of the Nth parenthesis matched.
-If a string, use ‘replace-match’.  In this case, ‘proof-goal-with-hole-regexp’
+If an int N, use `match-string' to get the value of the Nth parenthesis matched.
+If a string, use `replace-match'.  In this case, `proof-goal-with-hole-regexp'
 should match the entire command."
   :type '(choice string integer)
   :group 'proof-script)
@@ -691,19 +696,69 @@ needed for Coq."
   :type 'boolean
   :group 'proof-script)
 
-(defcustom proof-script-evaluate-elisp-comment-regexp "ELISP: -- \\(.*\\) --"
-  "Matches text within a comment telling Proof General to evaluate some code.
-This allows Emacs Lisp to be executed during scripting.
-\(It's also a fantastic backdoor security risk).
+(defcustom proof-omit-proofs-configured nil
+  "t if the omit proofs feature has been configured by the proof assitant.
+See also `proof-omit-proofs-option' or the Proof General manual
+for a description of the feature. This option can only be set, if
+all of `proof-script-proof-start-regexp',
+`proof-script-proof-end-regexp',
+`proof-script-definition-end-regexp' and
+`proof-script-proof-admit-command' have been configured.
 
-If the regexp matches text inside a comment, there should be
-one subexpression match string, which will contain elisp code
-to be evaluated.
+The omit proofs feature skips over opaque proofs in the source
+code, admitting the theorems, to speed up processing.
 
-Elisp errors will be trapped when evaluating; set
-`proof-general-debug' to be informed when this happens."
+If `proof-omit-proofs-option' is set by the user, all proof
+commands in the source following a match of
+`proof-script-proof-start-regexp' up to and including the next
+match of `proof-script-proof-end-regexp', are omitted (not send
+to the proof assistant) and replaced by
+`proof-script-proof-admit-command'. If a match for
+`proof-script-definition-end-regexp' is found while searching
+forward for the proof end, the current proof (up to and including
+the match of `proof-script-definition-end-regexp') is considered
+to be not opaque and not omitted, thus all these proof commands
+_are_ sent to the proof assistant.
+
+The feature does not work for nested proofs. If a match for
+`proof-script-proof-start-regexp' is found before the next match
+for `proof-script-proof-end-regexp' or
+`proof-script-definition-end-regexp', the search for opaque
+proofs immediately stops and all commands following the previous
+match of `proof-script-proof-start-regexp' are sent verbatim to
+the proof assistant.
+
+All the regular expressions for this feature are matched against
+the commands inside proof action items, that is as strings,
+without surrounding space."
+  :type 'boolean
+  :group 'proof-script)
+
+;; proof-omit-proofs-option is in proof-useropts as user option
+
+(defcustom proof-script-proof-start-regexp nil
+  "Regular expression for the start of a proof for the omit proofs feature.
+See `proof-omit-proofs-configured'."
   :type 'regexp
   :group 'proof-script)
+
+(defcustom proof-script-proof-end-regexp nil
+  "Regular expression for the end of an opaque proof for the omit proofs feature.
+See `proof-omit-proofs-configured'."
+  :type 'regexp
+  :group 'proof-script)
+
+(defcustom proof-script-definition-end-regexp nil
+  "Regexp for the end of a non-opaque proof for the omit proofs feature.
+See `proof-omit-proofs-configured'."
+  :type 'regexp
+  :group 'proof-script)
+  
+(defcustom proof-script-proof-admit-command nil
+  "Proof command to be inserted instead of omitted proofs."
+  :type 'string
+  :group 'proof-script)
+
 
 ;;
 ;; Proof script indentation
@@ -1340,44 +1395,6 @@ match data triggered by `proof-shell-retract-files-regexp'."
   :type 'string
   :group 'proof-shell)
 
-(defcustom proof-shell-set-elisp-variable-regexp nil
-  "Matches output telling Proof General to set some variable.
-This allows the proof assistant to configure Proof General directly
-and dynamically.   (It's also a fantastic backdoor security risk).
-
-More precisely, this should match a string which is bounded by
-matches on `proof-shell-eager-annotation-start' and
-`proof-shell-eager-annotation-end'.
-
-If the regexp matches output from the proof assistant, there should be
-two match strings: (match-string 1) should be the name of the elisp
-variable to be set, and (match-string 2) should be the value of the
-variable (which will be evaluated as a Lisp expression).
-
-A good markup for the second string is to delimit with #'s, since
-these are not valid syntax for elisp evaluation.
-
-Elisp errors will be trapped when evaluating; set
-`proof-general-debug' to be informed when this happens.
-
-Example uses are to adjust PG's internal copies of proof assistant's
-settings, or to make automatic dynamic syntax adjustments in Emacs to
-match changes in theory, etc.
-
-If you pick a dummy variable name (e.g. `proof-dummy-setting') you
-can just evaluation arbitrary elisp expressions for their side
-effects, to adjust menu entries, or even launch auxiliary programs.
-But use with care -- there is no protection against catastrophic elisp!
-
-This setting could also be used to move some configuration settings
-from PG to the prover, but this is not really supported (most settings
-must be made before this mechanism will work).  In future, the PG
-standard protocol, PGIP, will use this mechanism for making all
-settings."
-  :type '(choice (const nil) regexp)
-  :group 'proof-shell)
-
-
 (defcustom proof-shell-match-pgip-cmd nil
   "Regexp used to match PGIP command from proof assistant.
 
@@ -1498,6 +1515,19 @@ on `proof-shell-eager-annotation-start' and
 `proof-shell-eager-annotation-end'."
   :type '(choice (const nil) regexp)
   :group 'proof-shell)
+
+(defcustom proof-shell-last-cmd-left-goals-p (lambda () nil)
+  "A function to test: are we currently inside a proof?
+
+This function takes no argument and should use
+`proof-shell-last-prompt' and `proof-shell-last-output' to
+determine whether the last command ended up inside a
+proof (either by remaining inside one or opening a new one), or
+outside of any proof.
+"
+  :type 'function
+  :group 'proof-script)
+
 
 
 ;;
@@ -1748,16 +1778,51 @@ symbol is 'systemspecific."
   :type '(repeat function)
   :group 'proof-shell)
 
+
+(defcustom proof-state-change-pre-hook nil
+  "This hook is called when a scripting state change may have occurred.
+Specifically, this hook is called after a region has been asserted or
+retracted, or after a command has been sent to the prover with
+`proof-shell-invisible-command'.
+
+It is run *before* the generic processing of the command span is
+done (see function `prof-done-advancing'). See
+`proof-state-change-hook' to insert actions after it."
+  :type '(repeat function)
+  :group 'proof-shell)
+
 (defcustom proof-state-change-hook nil
   "This hook is called when a scripting state change may have occurred.
 Specifically, this hook is called after a region has been asserted or
 retracted, or after a command has been sent to the prover with
 `proof-shell-invisible-command'.
 
-This hook is used within Proof General to refresh the toolbar."
+It is run *after* the generic processing of the command span is
+done (see function `prof-done-advancing'). See
+`proof-state-change-pre-hook' to insert actions before it.
+
+This hook may be used to refresh the toolbar."
   :type '(repeat function)
   :group 'proof-shell)
 
+
+
+;;;;;;
+(defcustom proof-dependencies-system-specific nil
+  "Set this variable to handle system specific dependency output.
+This must be a function with 1 parameter: the goalsave span of
+the theorem being saved."
+  :type '(repeat function)
+  :group 'proof-shell)
+
+(defcustom proof-dependency-menu-system-specific nil
+  "Hook for system specific menu items for dependency menu.
+This must be a function taking one argument: the span one which
+the secific menu must be added. It must return a lit with the
+same type as `proof-dependency-in-span-context-menu' returns."
+  :type '(repeat function)
+  :group 'proof-shell)
+;;;;;
 (defcustom proof-shell-syntax-table-entries nil
   "List of syntax table entries for proof script mode.
 A flat list of the form

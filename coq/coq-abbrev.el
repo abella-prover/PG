@@ -78,7 +78,7 @@
 ;; Common part (script, response and goals buffers)
 (defconst coq-menu-common-entries
   `(
-    ["Toggle 3 Windows Mode" proof-three-window-toggle
+      ["Toggle 3 Windows Mode" proof-three-window-toggle
      :style toggle
      :selected proof-three-window-enable
      :help "Toggles the use of separate windows or frames for Coq responses and goals."
@@ -146,7 +146,37 @@
 		   coq-compile-parallel-in-background)
       :help ,(concat "Continue background compilation after "
 		     "the first error as far as possible")]
-     ("Quick compilation"
+     ("vos compilation (coq >= 8.11)"
+      ["unset"
+       (customize-set-variable 'coq-compile-vos nil)
+       :style radio
+       :selected (eq coq-compile-vos nil)
+       :active (and coq-compile-before-require
+		    coq-compile-parallel-in-background)
+       :help "Derive behavior from Quick compilation setting above"]
+      ["use -vos and -vok"
+       (customize-set-variable 'coq-compile-vos 'vos-and-vok)
+       :style radio
+       :selected (eq coq-compile-vos 'vos-and-vok)
+       :active (and coq-compile-before-require
+		    coq-compile-parallel-in-background)
+       :help "Speedup with -vos, check proofs later, possibly inconsistent"]
+      ["use -vos, no -vok"
+       (customize-set-variable 'coq-compile-vos 'vos)
+       :style radio
+       :selected (eq coq-compile-vos 'vos)
+       :active (and coq-compile-before-require
+		    coq-compile-parallel-in-background)
+       :help "Speedup with -vos, don't check proofs, possibly inconsistent"]
+      ["ensure vo"
+       (customize-set-variable 'coq-compile-vos 'ensure-vo)
+       :style radio
+       :selected (eq coq-compile-vos 'ensure-vo)
+       :active (and coq-compile-before-require
+		    coq-compile-parallel-in-background)
+       :help "Ensure only vo's are used for consistency"]
+      )
+     ("Quick compilation (coq < 8.11)"
       ["no quick"
        (customize-set-variable 'coq-compile-quick 'no-quick)
        :style radio
@@ -220,7 +250,7 @@
       :active (and coq-compile-before-require
 		   coq-compile-parallel-in-background)
       :help "Abort background compilation and kill all compilation processes."])
-    ("Diffs"
+     ("Diffs"
       ["off"
        (customize-set-variable 'coq-diffs 'off)
        :style radio
@@ -236,6 +266,32 @@
        :style radio
        :selected (eq coq-diffs 'removed)
        :help "Show diffs: added and removed"])
+    ["Show Proof (Diffs)"
+      coq-show-proof-stepwise-toggle
+      :style toggle
+      :selected coq-show-proof-stepwise
+      :help "Display the proof terms stepwise in the *response* buffer."]
+    ("\"Proof using\" mode..."
+     ["ask"
+      (customize-set-variable 'coq-accept-proof-using-suggestion 'ask)
+      :style radio
+      :selected (eq coq-accept-proof-using-suggestion 'ask)
+      :help "Ask user when a new proof using annotation is suggested"]
+     ["always"
+      (customize-set-variable 'coq-accept-proof-using-suggestion 'always)
+      :style radio
+      :selected (eq coq-accept-proof-using-suggestion 'always)
+      :help "Always update the proof using annotation when suggested"]
+     ["highlight"
+      (customize-set-variable 'coq-accept-proof-using-suggestion 'highlight)
+      :style radio
+      :selected (eq coq-accept-proof-using-suggestion 'highlight)
+      :help "Highight the proof when an auto insert is suggested (right click to insert))"]
+     ["Ignore"
+      (customize-set-variable 'coq-accept-proof-using-suggestion 'ignore)
+      :style radio
+      :selected (eq coq-accept-proof-using-suggestion 'ignore)
+      :help "no highlight (right click insertion still possible)"])
     ""
     ["Print..." coq-Print :help "With prefix arg (C-u): Set Printing All first"]
     ["Check..." coq-Check :help "With prefix arg (C-u): Set Printing All first"]
@@ -261,11 +317,10 @@
      ["About..." coq-About :help "With prefix arg (C-u): Set Printing All first"]
      ["About...(show implicits)" coq-About-with-implicits t]
      ["About...(show all)" coq-About-with-all t]
-     ["Search..." coq-SearchConstant t]
+     ["Search..." coq-Search t]
      ["SearchRewrite..." coq-SearchRewrite t]
-     ["SearchAbout (hiding principles)..." coq-SearchAbout t]
-     ["SearchAbout..." coq-SearchAbout-all t]
      ["SearchPattern..." coq-SearchIsos t]
+     ["Search Blacklist..." coq-change-search-blacklist-interactive t]
      ["Locate constant..." coq-LocateConstant t]
      ["Locate Library..." coq-LocateLibrary t]
      ["Pwd" coq-Pwd t]

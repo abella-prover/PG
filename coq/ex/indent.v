@@ -4,6 +4,30 @@ Notation "[ ]" := nil : list_scope.
 Notation "[ a ; .. ; b ]" := (a :: .. (b :: []) ..) : list_scope.
 
 Require Import Arith.
+Open Scope nat_scope.
+Definition arith1:=
+  1 + 3 *
+      4.
+
+Definition arith2 :=
+  1 * 3 +
+  4.
+
+Definition logic1 :=
+  True \/ False /\
+          False.
+
+Definition logic2 :=
+  True /\ False \/
+  False.
+
+Definition logic3 :=
+  let x := True /\ False in True \/
+                            False .
+Definition logic4 :=
+  (let x := True /\ False in True) \/
+  False .
+
 
 Record a : Type := make_a {
                        aa : nat
@@ -166,6 +190,27 @@ Module M1.
   End M2.
 End M1.
 
+Module GoalSelectors.
+  Theorem lt_n_S : (True \/ True \/ True \/ True \/ True ) -> True.
+  Proof.
+    refine (or_ind ?[aa] (or_ind ?[bb] (or_ind ?[cc] (or_ind ?[dd] ?[ee])))).
+    [aa]:{ auto. }
+    2:{  auto. }
+    [ee]:auto.
+    {  auto.}
+  Qed.
+  (* Same without space between "." and "}". *)
+  Theorem lt_n_S2 : (True \/ True \/ True \/ True \/ True ) -> True.
+  Proof.
+    refine (or_ind ?[aa] (or_ind ?[bb] (or_ind ?[cc] (or_ind ?[dd] ?[ee])))).
+    [aa]:{ auto.}
+    2:{  auto.}
+    [ee]:auto.
+    {  auto.}
+  Qed.
+
+
+End GoalSelectors.
 
 Module M1'.
   Module M2'.
