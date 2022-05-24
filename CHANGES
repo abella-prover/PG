@@ -2,11 +2,22 @@
 
 This is a summary of main changes.  For details, please see
 the Git ChangeLog, the GitHub repo https://github.com/ProofGeneral/PG
-and the PG Trac http://proofgeneral.inf.ed.ac.uk/trac
 
 * Changes of Proof General 4.5 from Proof General 4.4
 
 ** Generic changes
+*** License changed to GPLv3+
+*** Remove support for the following systems:
+Twelf, CCC, Lego, Hol-Light, ACL2, Plastic, Lambda-Clam, Isabelle, HOL98.
+
+*** require GNU Emacs 25.1 or later
+
+The current policy aims at supporting multiple Emacs versions,
+including those available in distributions Debian Stable
+(https://packages.debian.org/stable/emacs) and Ubuntu LTS
+(https://packages.ubuntu.com/emacs), until their End-Of-Support (see
+also https://wiki.ubuntu.com/Releases).
+
 
 *** new command and menu item to easily upgrade all packages
     - To upgrade all ELPA packages (including ProofGeneral if it was
@@ -184,14 +195,36 @@ and the PG Trac http://proofgeneral.inf.ed.ac.uk/trac
     - 92: Compile before require from current directory failing
       with 8.5
 
+*** indentation code refactored
+
+    A big refactoring of the code for indentation has been done. You
+    may experience a few changes in indentation results. Mostly small
+    shifts to the right.
+
+    Variable `coq-indent-box-style' only affects indentation after
+    quantifiers (used to affect script braces "{").
+
+    Variable `coq-indent-align-with-first-arg` governs between these
+    two indentation behaviours:
+
+    (setq 'coq-indent-align-with-first-arg t) gives
+
+        somefunciton x y
+                     z t u
+                     v
+    (setq 'coq-indent-align-with-first-arg nil) give (default):
+
+        somefunciton x y
+          z t u
+          v
+
 * Changes of Proof General 4.4 from Proof General 4.3
 
 ** ProofGeneral has moved to GitHub!
 
    https://github.com/ProofGeneral/PG
 
-   Please submit new bugs there, old bugs may stay in good old PG trac
-   for a while though: http://proofgeneral.inf.ed.ac.uk/trac
+   Please submit new bugs there.
 
 ** Coq changes
 

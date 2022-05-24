@@ -1,11 +1,11 @@
-;; This file is part of Proof General.
+;; This file is part of Proof General.  -*- lexical-binding: t; -*-
 ;; 
 ;; © Copyright 2021  Hendrik Tews
 ;; 
 ;; Authors: Hendrik Tews
 ;; Maintainer: Hendrik Tews <hendrik@askra.de>
 ;; 
-;; License:     GPL (GNU GENERAL PUBLIC LICENSE)
+;; SPDX-License-Identifier: GPL-3.0-or-later
 
 ;;; Commentary:
 ;;
@@ -13,7 +13,12 @@
 ;; ert tests for parallel background compilation for Coq
 ;;
 ;; Test that default-directory is correctly set independently of the
-;; current buffer in the foreground.
+;; current buffer in the foreground, both for first and second stage
+;; compilation.
+;;
+;; This test fails for Coq 8.15.0, because the test checks .vok files,
+;; which, in certain situations, are not created by that coq version.
+;; See Coq issue 15773.
 ;;
 ;; The dependencies in this test are:
 ;; 
@@ -26,7 +31,7 @@
 
 
 ;; require cct-lib for the elisp compilation, otherwise this is present already
-(require 'cct-lib)
+(require 'cct-lib "ci/compile-tests/cct-lib")
 
 ;;; set configuration
 (cct-configure-proof-general)
@@ -36,7 +41,7 @@
   "All ancestors.")
 
 (defconst all-compiled-ancestors
-  (mapcar 'cct-library-vo-of-v-file all-ancestors)
+  (mapcar #'cct-library-vo-of-v-file all-ancestors)
   "All vo ancestors files.")
 
 (defun check-main-buffer (vo-times new-sum recompiled-files
@@ -60,9 +65,14 @@ See `cct-generic-check-main-buffer'."
 ;;; The test itself
 
 (ert-deftest test-default-dir ()
+  :expected-result (if (equal (coq-version t) "8.15.0") :failed  :passed)
   "`default-directory' test.
 Test that `default-directory' is correctly set independently of the
-current buffer in the foreground."
+current buffer in the foreground.
+
+This test fails for Coq 8.15.0, because the test checks .vok
+files, which are not created by that coq version, in certain
+situations. See Coq issue 15773."
   (let (vo-times av-buffer ci-buffer other-locked-files
         vok-times vos-vio-files)
 

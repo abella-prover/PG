@@ -17,8 +17,6 @@ jobs:
     strategy:
       matrix:
         emacs_version:
-          - 24.5
-          # 24.5 to be removed at End-of-Support of Ubuntu 16.04 LTS (https://wiki.ubuntu.com/Releases)
           - 25.1
           - 25.2
           - 25.3
@@ -26,6 +24,7 @@ jobs:
           - 26.2
           - 26.3
           - 27.1
+          - 27.2
       # at most 20 concurrent jobs per free account
       # cf. https://help.github.com/en/actions/reference/workflow-syntax-for-github-actions#usage-limit
       max-parallel: 4
@@ -63,7 +62,7 @@ jobs:
           # versions. The latest two should be enough, maybe even
           # only the latest one.
           - 26.3
-          - 27.1
+          - 27.2
       fail-fast: false
 
     steps:
@@ -75,7 +74,7 @@ jobs:
 
     - run: emacs --version
     - run: make -C doc magic
-    - run: git diff --exit-code
+    - run: git diff --exit-code -- doc
       
   test:
     runs-on: ubuntu-latest
@@ -93,6 +92,10 @@ jobs:
           - '8.9'
           - '8.10'
           - '8.11'
+          - '8.12'
+          - '8.13'
+          - '8.14'
+          - '8.15'
         ocaml_version:
           - minimal
       # at most 20 concurrent jobs per free account
@@ -123,7 +126,7 @@ jobs:
           endGroup
           startGroup Run tests
             sudo chown -R coq:coq ./ci
-            ./ci/test.sh
+            make tests
           endGroup
 
   # - run: echo "::remove-matcher owner=ert-problem-matcher::"
@@ -138,6 +141,10 @@ jobs:
           - '8.9'
           - '8.10'
           - '8.11'
+          - '8.12'
+          - '8.13'
+          - '8.14'
+          - '8.15'
         ocaml_version:
           - minimal
       # at most 20 concurrent jobs per free account
@@ -187,6 +194,10 @@ jobs:
           - '8.9'
           - '8.10'
           - '8.11'
+          - '8.12'
+          - '8.13'
+          - '8.14'
+          - '8.15'
         ocaml_version:
           - minimal
       max-parallel: 6
@@ -223,3 +234,37 @@ jobs:
             sudo chown -R coq:coq ./ci
             make -C ci/simple-tests all
           endGroup
+
+  # Run indentation tests in ci/test-indent on all supported emacs
+  # versions without coq installed.
+  test-indent:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        emacs_version:
+          - 25.1
+          - 25.2
+          - 25.3
+          - 26.1
+          - 26.2
+          - 26.3
+          - 27.1
+          - 27.2
+      max-parallel: 4
+      # don't cancel all in-progress jobs if one matrix job fails:
+      fail-fast: false
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - uses: purcell/setup-emacs@master
+      with:
+        version: ${{ matrix.emacs_version }}
+
+    - run: emacs --version
+    - run: make -C ci/test-indent
+
+    # Testing this here because this job runs with all Emacs versions
+    - run: make -C ci/simple-tests test-qrhl.success
+      

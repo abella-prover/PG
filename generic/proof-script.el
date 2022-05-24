@@ -3,7 +3,7 @@
 ;; This file is part of Proof General.
 
 ;; Portions © Copyright 1994-2012  David Aspinall and University of Edinburgh
-;; Portions © Copyright 2003-2018  Free Software Foundation, Inc.
+;; Portions © Copyright 2003-2021  Free Software Foundation, Inc.
 ;; Portions © Copyright 2001-2017  Pierre Courtieu
 ;; Portions © Copyright 2010, 2016  Erik Martin-Dorel
 ;; Portions © Copyright 2011-2013, 2016-2017  Hendrik Tews
@@ -12,7 +12,7 @@
 ;; Authors:   David Aspinall, Yves Bertot, Healfdene Goguen,
 ;;            Thomas Kleymann and Dilip Sequeira
 
-;; License:   GPL (GNU GENERAL PUBLIC LICENSE)
+;; SPDX-License-Identifier: GPL-3.0-or-later
 
 ;;; Commentary:
 ;;
@@ -86,6 +86,7 @@ If ASSISTANT-NAME is omitted, look up in `proof-assistant-table'."
        (cus-internals (intern (concat cusgrp-rt "-config")))
        (elisp-dir     sname)		; NB: dirname same as symbol name!
        (loadpath-elt  (concat proof-home-directory elisp-dir "/")))
+    ;; FIXME: Yuck!!
     (eval `(progn
        ;; Make a customization group for this assistant
        (defgroup ,cusgrp nil
@@ -116,11 +117,12 @@ If ASSISTANT-NAME is omitted, look up in `proof-assistant-table'."
        ;; Extend the load path if necessary
        (proof-add-to-load-path ,loadpath-elt)
        ;; Run hooks for late initialisation
-       (run-hooks 'proof-ready-for-assistant-hook))))))
+       (run-hooks 'proof-ready-for-assistant-hook))
+          t))))
 
 
 (defalias 'proof-active-buffer-fake-minor-mode
-  'proof-toggle-active-scripting)
+  #'proof-toggle-active-scripting)
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -601,8 +603,7 @@ It is recorded in the span with the 'rawname property."
 	 (rawname  name)
 	 (name	   (or name id))
 	 (idiom    (symbol-name idiomsym))
-	 (delfn	   `(lambda () (pg-remove-element
-				(quote ,idiomsym) (quote ,idsym))))
+	 (delfn	   (lambda () (pg-remove-element idiomsym idsym)))
 	 (elts (cdr-safe (assq idiomsym pg-script-portions))))
     (unless elts
       (setq pg-script-portions
@@ -741,14 +742,14 @@ Each span has a 'type property, one of:
 (defvar pg-span-context-menu-keymap
   (let ((map (make-sparse-keymap
 	      "Keymap for context-sensitive menus on spans")))
-      (define-key map [down-mouse-3] 'pg-span-context-menu)
+      (define-key map [down-mouse-3] #'pg-span-context-menu)
       map)
     "Keymap for the span context menu.")
 
 (defun pg-last-output-displayform ()
   "Return displayable form of `proof-shell-last-output'.
 This is used to annotate the buffer with the result of proof steps."
-  ;; NOTE: Isabelle/Isar uses urgent messages (sigh) in its ordinary output.
+  ;; NOTE: Isabelle/Isar used urgent messages (sigh) in its ordinary output.
   ;; ("Successful attempt...").  This loses here.
   (if (string= proof-shell-last-output "") ""
     (let* ((text (proof-shell-strip-output-markup
@@ -1408,7 +1409,7 @@ that is not yet documented here, this function
 	       ;; don't amalgamate unless the nesting depth is 0,
 	       ;; i.e. we're in a top-level proof.
 	       ;; This assumes prover keeps history for nested proofs.
-	       ;; (True for Isabelle/Isar).
+	       ;; (was true for Isabelle/Isar).
 	       (eq proof-nesting-depth 0)
 	     t))
       (proof-done-advancing-save span))
@@ -1465,8 +1466,7 @@ that is not yet documented here, this function
 		    (+ (length comment-start) (span-start span))
 		    (- (span-end span)
 		       (max 1 (length comment-end)))))
-	(id        (proof-next-element-id 'comment))
-	str)
+	(id        (proof-next-element-id 'comment)))
     (pg-add-element 'comment id bodyspan)
     (span-set-property span 'id (intern id))
     (span-set-property span 'idiom 'comment)
@@ -1487,9 +1487,10 @@ Besides stuff that is not yet documented here, this function
 - enters some commands and their spans in some database (with for
   me unknown purpose)"
   (unless (or (eq proof-shell-proof-completed 1)
-	      (eq proof-assistant-symbol 'isar))
+	      ;; (eq proof-assistant-symbol 'isar)
+	      )
     ;; We expect saves to succeed only for recently completed top-level proofs.
-    ;; NB: not true in Isar, because save commands can perform proof.
+    ;; NB: Wasn't true in Isar, because save commands could perform proof.
     ;; Note: not true in Coq either, if there is a command (eg. a Check)
     ;; between the tactic that finished the proof and the Qed.
     (proof-debug
@@ -2027,7 +2028,7 @@ start is found inside a proof."
     (while vanillas
       (setq item (car vanillas))
       ;; cdr vanillas is at the end of the loop
-      (setq cmd (mapconcat 'identity (nth 1 item) " "))
+      (setq cmd (mapconcat #'identity (nth 1 item) " "))
       (if inside-proof
           (progn
             (if (string-match proof-script-proof-start-regexp cmd)
@@ -2200,12 +2201,17 @@ be omitted from the vanilla action list obtained from SEMIS."
       (setq vanillas (proof-script-omit-proofs vanillas)))
     (proof-extend-queue lastpos vanillas)))
 
+(defvar proof--inhibit-retract-on-change nil)
+
 (defun proof-retract-before-change (beg end)
   "For `before-change-functions'.  Retract to BEG unless BEG and END in comment.
 No effect if prover is busy."
-  (when (and (> (proof-queue-or-locked-end) beg)
-	     (not (and (proof-inside-comment beg)
-		       (proof-inside-comment end))))
+  (unless (or (<= (proof-queue-or-locked-end) beg)
+	      proof--inhibit-retract-on-change
+	      (and (proof-inside-comment beg)
+		   ;; FIXME: This may mis fire if a change starts in a comment
+		   ;; and ends in another but with non-comment code in-between.
+		   (proof-inside-comment end)))
     (when proof-shell-busy
       (message "Interrupting prover")
       (proof-interrupt-process)
@@ -2253,7 +2259,7 @@ No effect if prover is busy."
 ;;
 
 ;; Most of the hard work (computing the commands to do the retraction)
-;; is implemented in the customisation module (lego.el or coq.el), so
+;; is implemented in the customisation module (e.g. coq.el), so
 ;; code here is fairly straightforward.
 
 
@@ -2790,9 +2796,9 @@ finish setup which depends on specific proof assistant configuration."
 ;; This key-binding was disabled following a request in PG issue #160.
 ;;	(define-key proof-mode-map
 ;;	  (vconcat [(control c)] (vector (aref proof-terminal-string 0)))
-;;	  'proof-electric-terminator-toggle)
+;;	  #'proof-electric-terminator-toggle)
 	(define-key proof-mode-map (vector (aref proof-terminal-string 0))
-	  'proof-electric-terminator)))
+	  #'proof-electric-terminator)))
 
   ;; Toolbar, main menu (loads proof-toolbar,setting p.-toolbar-scripting-menu)
   (proof-toolbar-setup)
@@ -2800,8 +2806,6 @@ finish setup which depends on specific proof assistant configuration."
   ;; Menus: the Proof-General and the specific menu
   (proof-menu-define-main)
   (proof-menu-define-specific)
-  (easy-menu-add proof-mode-menu proof-mode-map)
-  (easy-menu-add proof-assistant-menu proof-mode-map)
 
   ;; Define parsing functions
   (proof-setup-parsing-mechanism)
@@ -2827,6 +2831,13 @@ finish setup which depends on specific proof assistant configuration."
   (when proof-layout-windows-on-visit-file
       (proof-shell-make-associated-buffers)
       (proof-layout-windows))
+
+  ;; Allow reindenting the already-processed code without causing
+  ;; a retraction.
+  (add-function :around (local 'indent-line-function)
+                #'(lambda (orig-fun &rest args)
+                    (let ((proof--inhibit-retract-on-change t))
+                      (apply orig-fun args))))
 
   ;; Make sure the user has been welcomed!
   (proof-splash-message))

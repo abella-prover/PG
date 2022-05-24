@@ -15,23 +15,21 @@ This is version 4.5-git of Proof General.
 
 Two editions of Proof General are currently available:
 
-* the (legacy) REPL-based, stable version of Proof General,
+* the (standard) REPL-based, stable version of Proof General,
   gathered in the
-  [master](https://github.com/ProofGeneral/PG/tree/master) branch, and
-  licensed under GPLv2;
-* the (newest) Coq-specific, experimental version of Proof General,
+  [master](https://github.com/ProofGeneral/PG/tree/master) branch;
+* the (unmaintained) Coq-specific, experimental version of Proof General,
   supporting asynchronous proof processing,
   gathered in the
-  [async](https://github.com/ProofGeneral/PG/tree/async) branch, and
-  licensed under GPLv3+.
+  [async](https://github.com/ProofGeneral/PG/tree/async) branch.
 
 ## Installing Proof General
 
-Proof General requires GNU Emacs `24.5` or later.
+Proof General requires GNU Emacs `25.1` or later.
 
 The current policy aims at supporting multiple Emacs versions,
 including those available in [Debian Stable](https://packages.debian.org/stable/emacs)
-as well as in [Ubuntu LTS](https://packages.ubuntu.com/emacs24) distributions
+as well as in [Ubuntu LTS](https://packages.ubuntu.com/emacs) distributions
 until their [End-Of-Support](https://wiki.ubuntu.com/Releases).
 
 ### Using MELPA (recommended procedure)
@@ -126,30 +124,23 @@ See:
 Links:
 
 * [https://proofgeneral.github.io/doc](https://proofgeneral.github.io/doc) for online documentation of Proof General
-* [http://proofgeneral.inf.ed.ac.uk/mailinglist](http://proofgeneral.inf.ed.ac.uk/mailinglist) for mailing list information
+* [https://coq.zulipchat.com](https://coq.zulipchat.com/) for chatting with PG maintainers and developers on the Zulip chat of Coq (in streams [Proof General devs](https://coq.zulipchat.com/#narrow/stream/304020-Proof-General.20devs) and [Proof General users](https://coq.zulipchat.com/#narrow/stream/304019-Proof-General.20users))
+* [https://coq.gitlab.io/zulip-archive](https://coq.gitlab.io/zulip-archive) for the corresponding public Zulip archive (read-only, no authentication required)
 
 Supported proof assistants:
 
 * [Coq](https://coq.inria.fr/)
 * [EasyCrypt](https://www.easycrypt.info/)
 * [PhoX](https://raffalli.eu/phox/)
+* [qrhl-tool](https://github.com/dominique-unruh/qrhl-tool/#readme)
 
 Proof General used to support other proof assistants, but those
 instances are no longer maintained nor available in the MELPA package:
 
-* Legacy support of
-  [Isabelle](https://www.cl.cam.ac.uk/research/hvg/Isabelle/) and
-  [LEGO](http://www.dcs.ed.ac.uk/home/lego)
-* Experimental support of: CCC, ACL2, HOL98, Hol-Light, Lambda-Clam, Shell, Twelf
-* Obsolete instances: Demoisa, Lambda-Clam, Plastic
+* Experimental support of: Shell
+* Obsolete instances: Demoisa
+* Removed instances: Twelf, CCC, Hol-Light, ACL2, Plastic, Lambda-Clam, HOL98,
+  [LEGO](http://www.dcs.ed.ac.uk/home/lego),
+  [Isabelle](https://www.cl.cam.ac.uk/research/hvg/Isabelle/)
 
 A few example proofs are included in each prover subdirectory.
-
-## Contributing
-
-Contributions to this repository are placed under the BSD-3 license.
-As BSD-3 is compatible with both GPLv2 and GPLv3+, this means that
-we can merge them in both `master` and `async` branches if need be,
-using the same license as the rest of the codebase, while you keep
-all the rights on your code.
-For more info, see <https://opensource.org/licenses/BSD-3-Clause>.

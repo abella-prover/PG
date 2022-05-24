@@ -3,7 +3,7 @@
 ;; This file is part of Proof General.
 
 ;; Portions © Copyright 1994-2012  David Aspinall and University of Edinburgh
-;; Portions © Copyright 2003-2018  Free Software Foundation, Inc.
+;; Portions © Copyright 2003-2021  Free Software Foundation, Inc.
 ;; Portions © Copyright 2001-2017  Pierre Courtieu
 ;; Portions © Copyright 2010, 2016  Erik Martin-Dorel
 ;; Portions © Copyright 2011-2013, 2016-2017  Hendrik Tews
@@ -12,7 +12,7 @@
 ;; Authors:   David Aspinall, Yves Bertot, Healfdene Goguen,
 ;;            Thomas Kleymann and Dilip Sequeira
 
-;; License:   GPL (GNU GENERAL PUBLIC LICENSE)
+;; SPDX-License-Identifier: GPL-3.0-or-later
 
 ;;; Commentary:
 ;;
@@ -376,7 +376,7 @@ process command."
 	      proof-shell-process-connection-type)
 
 	     ;; Trac #324, Trac #284: default with Emacs 23 variants
-	     ;; is t.  nil gives marginally better results with "make
+	     ;; is t.  nil gave marginally better results with "make
 	     ;; profile.isar" on homogenous test input.  Top-level
 	     ;; Emacs loop causes slow down on Mac and Windows ports.
 	     (process-adaptive-read-buffering nil)
@@ -494,6 +494,22 @@ process command."
 (defvar proof-shell-kill-function-hooks nil
   "Functions run from `proof-shell-kill-function'.")
 
+(defun proof-shell-kill-function-kill-associated-buffers ()
+  "Kill the goal, response, and trace buffers, as well as frames if necessary."
+  ;; Remove auxiliary windows, trying to stop proliferation of
+  ;; frames (NB: loses if user has switched buffer in special frame)
+  (if (and proof-multiple-frames-enable
+	   proof-shell-fiddle-frames)
+      (proof-delete-all-associated-windows))
+
+  (let ((proof-shell-buffer nil)) ;; fool kill buffer hooks
+    (dolist (buf '(proof-goals-buffer proof-response-buffer
+				      proof-trace-buffer))
+      (when (buffer-live-p (symbol-value buf))
+        (delete-windows-on (symbol-value buf))
+        (kill-buffer (symbol-value buf))
+        (set buf nil)))))
+
 (defun proof-shell-kill-function ()
   "Function run when a proof-shell buffer is killed.
 Try to shut down the proof process nicely and clear locked
@@ -544,20 +560,9 @@ shell buffer, called by `proof-shell-bail-out' if process exits."
     (proof-shell-clear-state)
     (run-hooks 'proof-shell-kill-function-hooks)
 
-    ;; Remove auxiliary windows, trying to stop proliferation of
-    ;; frames (NB: loses if user has switched buffer in special frame)
-    (if (and proof-multiple-frames-enable
-	     proof-shell-fiddle-frames)
-	(proof-delete-all-associated-windows))
+    (when proof-shell-kill-function-also-kills-associated-buffers
+      (proof-shell-kill-function-kill-associated-buffers))
 
-    ;; Kill associated buffer
-    (let ((proof-shell-buffer nil)) ;; fool kill buffer hooks
-      (dolist (buf '(proof-goals-buffer proof-response-buffer
-					proof-trace-buffer))
-	(when (buffer-live-p (symbol-value buf))
-	  (delete-windows-on (symbol-value buf))
-	  (kill-buffer (symbol-value buf))
-	  (set buf nil))))
     (setq proof-shell-exit-in-progress nil)
     (message "%s exited." bufname)))
 
@@ -627,7 +632,7 @@ It is up to the proof assistant how much context is cleared: for
 example, theories already loaded may be \"cached\" in some way,
 so that loading them the next time round only performs a re-linking
 operation, not full re-processing.  (One way of caching is via
-object files, used by Lego and Coq)."
+object files, used by Coq)."
   (interactive)
   (when proof-shell-busy
     (proof-interrupt-process)

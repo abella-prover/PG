@@ -3,7 +3,7 @@
 ;; This file is part of Proof General.
 
 ;; Portions © Copyright 1994-2012  David Aspinall and University of Edinburgh
-;; Portions © Copyright 2003-2018  Free Software Foundation, Inc.
+;; Portions © Copyright 2003-2021  Free Software Foundation, Inc.
 ;; Portions © Copyright 2001-2017  Pierre Courtieu
 ;; Portions © Copyright 2010, 2016  Erik Martin-Dorel
 ;; Portions © Copyright 2011-2013, 2016-2017  Hendrik Tews
@@ -11,7 +11,7 @@
 
 ;; Author:      David Aspinall <David.Aspinall@ed.ac.uk> and others
 
-;; License:     GPL (GNU GENERAL PUBLIC LICENSE)
+;; SPDX-License-Identifier: GPL-3.0-or-later
 
 ;;; Commentary:
 ;;
@@ -230,6 +230,17 @@ selected frame will be automatically deleted."
   :type 'boolean
   :group 'proof-user-options)
 
+(defcustom proof-shell-kill-function-also-kills-associated-buffers t
+  "*If non-nil, when `proof-shell-kill-function' is called, clean up buffers.
+For example, `proof-shell-kill-function' is called when buffers
+are retracted when switching between proof script files. It may
+make sense to set this to `nil' when
+`proof-multiple-frames-enable' is set to prevent proof general
+from killing frames that you want to be managed by a window
+manager instead of within emacs."
+  :type 'boolean
+  :group 'proof-user-options)
+
 (defcustom proof-shrink-windows-tofit nil
   "*If non-nil, automatically shrink output windows to fit contents.
 In single-frame mode, this option will reduce the size of the
@@ -392,8 +403,8 @@ For example,
 
    ssh bigjobs
 
-Would cause Proof General to issue the command `ssh bigjobs isabelle'
-to start Isabelle remotely on our large compute server called `bigjobs'.
+Would cause Proof General to issue the command `ssh bigjobs coqtop'
+to start Coq remotely on our large compute server called `bigjobs'.
 
 The protocol used should be configured so that no user interaction
 \(passwords, or whatever) is required to get going.  For proper
