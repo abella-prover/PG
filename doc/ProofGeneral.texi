@@ -57,9 +57,9 @@
 @c        @ref{node}                without "see". Careful for info.
 @c
 
-@set version 4.5-git
-@set emacsversion 25.1
-@set last-update February 2021
+@set version 4.6-git
+@set emacsversion 25.2
+@set last-update July 2022
 @set rcsid $Id$
 
 @dircategory Theorem proving
@@ -81,6 +81,19 @@
 
 @c merge functions into variables index
 @c @syncodeindex fn vr
+
+@c Attempt before https://github.com/ProofGeneral/proofgeneral.github.io/commit/dbd891d01fd37564cb329543b8e48cfe9a3e6d7f
+@c @macro emacsuorinforef {txt,sectiondash,sectionspace}
+@c @iftex
+@c @uref{https://www.gnu.org/software/emacs/manual/html_node/emacs/\sectiondash\#\sectiondash\,\txt\}
+@c @end iftex
+@c @ifhtml
+@c @uref{https://www.gnu.org/software/emacs/manual/html_node/emacs/\sectiondash\#\sectiondash\,\txt\}
+@c @end ifhtml
+@c @ifinfo
+@c @inforef{\sectionspace\, ,emacs}
+@c @end ifinfo
+@c @end macro
 
 @finalout
 @titlepage
@@ -145,8 +158,8 @@ This file documents version @value{version} of @b{Proof General}, a
 generic Emacs interface for proof assistants.
 
 Proof General @value{version} has been tested with GNU Emacs
-@value{emacsversion} on Linux.  It is supplied ready to use for the proof
-assistants Coq, EasyCrypt, and PhoX.
+@value{emacsversion} on Linux.  It is supplied ready to use for the
+proof assistants Coq, EasyCrypt, qrhl-tool, and PhoX.
 
 @menu
 * Preface::                     
@@ -192,6 +205,7 @@ other documentation, system downloads, etc.
 
 
 @menu
+* News for Version 4.6::
 * News for Version 4.5::
 * News for Version 4.4::
 * News for Version 4.3::
@@ -202,11 +216,23 @@ other documentation, system downloads, etc.
 * Credits::                     
 @end menu
 
+@node News for Version 4.6
+@unnumberedsec News for Version 4.6
+@cindex news
+
+N/A
+
 @node News for Version 4.5
 @unnumberedsec News for Version 4.5
 @cindex news
 
 Proof-General is now distributed under the GPLv3+ license.
+
+This release contains several bugfixes and many new features (see the
+CHANGES file or the Git changelog for more details).
+
+The support of the following systems have been added: EasyCrypt,
+qrhl-tool.
 
 The old code for the support of the following systems have been
 removed: Twelf, CCC, Lego, Hol-Light, ACL2, Plastic, Lambda-Clam,
@@ -4187,6 +4213,7 @@ assistant.  It supports most of the generic features of Proof General.
 * Holes feature::
 * Proof-Tree Visualization::
 * Showing Proof Diffs::
+* Opam-switch-mode support::
 @end menu
 
 
@@ -4237,6 +4264,7 @@ Inserts ``End <section-name>.'' (this should work well with nested sections).
 
 @node Using the Coq project file
 @section Using the Coq project file
+@cindex _CoqProject
 
 The Coq project file is the recommended way to configure the Coq
 load path and the mapping of logical module names to physical
@@ -4294,6 +4322,7 @@ below.
 
 @node Changing the name of the coq project file
 @subsection Changing the name of the coq project file
+@cindex .dir-locals.el
 
 To change the name of the Coq project file, configure
 @code{coq-project-filename} (select menu @code{Proof-General ->
@@ -4305,18 +4334,18 @@ If you only want to change the name of the Coq project file for
 one project you can set the option as local file variable,
 @ref{Using file variables}. This can be done either directly in
 every file or once for all files of a directory tree with a
-@code{.dir-local.el} file, @inforef{Directory Variables, ,emacs}.
-The file @code{.dir-local.el} should then contain
+@code{.dir-locals.el} file, @inforef{Directory Variables, ,emacs}.
+The file @code{.dir-locals.el} should then contain
 
 @lisp
 ((coq-mode . ((coq-project-filename . "myprojectfile"))))
 @end lisp
 
-Note that variables set in @code{.dir-local.el} are automatically
+Note that variables set in @code{.dir-locals.el} are automatically
 made buffer local (such that files in different directories can
 have their independent setting of @code{coq-project-filename}).
 If you make complex customizations using @code{eval} in
-@code{.dir-local.el}, you might want to add appropriate calls to
+@code{.dir-locals.el}, you might want to add appropriate calls to
 @code{make-local-variable}.
 
 Documentation of the user option @code{coq-project-filename}:
@@ -4361,6 +4390,7 @@ on a per project basis.
 
 @node Proof using annotations
 @section Proof using annotations
+@cindex Proof using
 
 In order to process files asynchronously and pre-compile files (.vos and
 .vok files), it is advised (inside sections) to list the section
@@ -4394,6 +4424,7 @@ This can be configured either via Coq menu or by setting variable
 
 @node Multiple File Support
 @section Multiple File Support
+@cindex multiple file support
 
 Since version 4.1 Coq Proof General has multiple file support. It
 consists of the following points:
@@ -4583,7 +4614,7 @@ compilation, but exclusively, depending on the Coq version,
 
 @node Locking Ancestors
 @subsection Locking Ancestors
-
+@vindex proof-strict-read-only
 
 Locking ancestor files works as a side effect of dependency
 checking. This means that ancestor locking does only work when
@@ -5041,6 +5072,7 @@ General will perform some unnecessary compilations.
 
 @node Omitting proofs for speed
 @section Omitting proofs for speed
+@cindex Omitting proofs for speed
 
 To speed up asserting larger chunks, Proof General can omit
 complete opaque proofs by silently replacing the whole proof
@@ -5264,6 +5296,7 @@ you want to save abbrevs; answer yes.
 
 @node Proof-Tree Visualization
 @section Proof-Tree Visualization
+@cindex Proof-Tree visualization
 
 Starting with Proof General version 4.2 and Coq version 8.4, Coq
 Proof General has full support for proof-tree visualization, 
@@ -5283,6 +5316,9 @@ several layers.
 
 @node Showing Proof Diffs
 @section Showing Proof Diffs
+@cindex Showing Proof Diffs
+@vindex coq-diffs
+@vindex coq-show-proof-stepwise
 
 Coq 8.10 supports automatically highlighting the differences
 between successive proof steps in Proof General.  The feature is described in the
@@ -5319,6 +5355,42 @@ The 4 @code{Coq Diffs ...} faces control the highlights.  Lines that
 have added or removed tokens are shown with the entire line highlighted with
 a @code{Coq Diffs ... Bg} face.  The added or removed tokens themselves are highlighted
 with non-@code{Bg} faces.
+
+@node Opam-switch-mode support
+@section Opam-switch-mode support
+@cindex opam-switch-mode support
+
+Coq can be installed using @code{opam} (the OCaml package manager),
+which makes it easy to manage several different switches, having each
+a different version of Coq.
+
+Instead of running a command like @code{opam switch ...} in a terminal
+and restarting emacs to benefit from a different switch, one can:
+
+@itemize @bullet
+@item
+@b{Install} the
+@uref{https://github.com/ProofGeneral/opam-switch-mode,
+opam-switch-mode} and use the dedicated mode bar menu @code{OPSW} it
+provides.
+@item
+@b{Configure} Proof General using the customization option
+@code{coq-kill-coq-on-opam-switch}, so that the Coq background process
+is killed when changing the opam switch through
+@code{opam-switch-mode}.
+@end itemize
+
+@c TEXI DOCSTRING MAGIC: coq-kill-coq-on-opam-switch
+@defvar coq-kill-coq-on-opam-switch 
+If t kill coq when the opam switch changes (requires @samp{opam-switch-mode}).@*
+When @samp{opam-switch-mode} is loaded and the user changes the opam switch
+through @samp{opam-switch-mode} then this option controls whether the coq
+background process (the proof shell) is killed such that the next
+assert command starts a new proof shell, probably using a
+different coq version from a different opam switch.
+
+See https://github.com/ProofGeneral/opam-switch-mode for @samp{opam-switch-mode}
+@end defvar
 
 @c =================================================================
 @c

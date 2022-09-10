@@ -1,7 +1,11 @@
 # Proof General — Organize your proofs! 
 
 [![CI](https://github.com/ProofGeneral/PG/workflows/CI/badge.svg?branch=master)](https://github.com/ProofGeneral/PG/actions?query=workflow%3ACI)
+[![NonGNU ELPA](https://elpa.nongnu.org/nongnu/proof-general.svg)](https://elpa.nongnu.org/nongnu/proof-general.html)
 [![MELPA](https://melpa.org/packages/proof-general-badge.svg)](https://melpa.org/#/proof-general)
+[![MELPA Stable](https://stable.melpa.org/packages/proof-general-badge.svg)](https://stable.melpa.org/#/proof-general)  
+[![ProofGeneral doc](https://img.shields.io/badge/doc-Proof%20General%20user%20manual-blue.svg)](https://proofgeneral.github.io/doc/master/userman/ "The ProofGeneral user manual")
+[![PG-adapting doc](https://img.shields.io/badge/doc-PG--adapting-blue.svg)](https://proofgeneral.github.io/doc/master/adaptingman/ "PG's adapting manual to add provers")
 
 ## Overview
 
@@ -9,7 +13,7 @@ Proof General is a generic Emacs interface for proof assistants.
 The aim of the Proof General project is to provide a powerful, generic
 environment for using interactive proof assistants.
 
-This is version 4.5-git of Proof General.
+This is version 4.6-git of Proof General.
 
 ## About Proof General branches
 
@@ -25,14 +29,21 @@ Two editions of Proof General are currently available:
 
 ## Installing Proof General
 
-Proof General requires GNU Emacs `25.1` or later.
+Proof General requires GNU Emacs `25.2` or later.
 
 The current policy aims at supporting multiple Emacs versions,
 including those available in [Debian Stable](https://packages.debian.org/stable/emacs)
 as well as in [Ubuntu LTS](https://packages.ubuntu.com/emacs) distributions
 until their [End-Of-Support](https://wiki.ubuntu.com/Releases).
 
-### Using MELPA (recommended procedure)
+### Using NonGNU ELPA
+
+[NonGNU ELPA](https://elpa.nongnu.org/) is the sister repository of
+[GNU ELPA](https://elpa.gnu.org/) and enabled by default from Emacs 28
+onwards.   You can directly install Proof General from NonGNU ELPA if
+the repository is enabled.
+
+### Using MELPA
 
 [MELPA](https://melpa.org/) is a repository of Emacs packages. Skip
 this step if you already use MELPA. Otherwise, add the following to
@@ -65,8 +76,9 @@ Then, run <kbd>M-x package-refresh-contents RET</kbd> followed by
 <kbd>M-x package-install RET proof-general RET</kbd> to install and
 byte-compile `proof-general`.
 
-You can now open a Coq file (`.v`), an EasyCrypt file (`.ec`), or a
-PhoX file (`.phx`) to automatically load the corresponding major mode.
+You can now open a Coq file (`.v`), an EasyCrypt file (`.ec`), a
+qrhl-tool file (`.qrhl`), or a PhoX file (`.phx`) to automatically
+load the corresponding major mode.
 
 ### Using Git (manual compilation procedure)
 

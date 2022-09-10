@@ -70,7 +70,7 @@
 
 (eval-and-compile
   ;; WARNING: do not edit next line (constant is edited in Makefile.devel)
-  (defconst proof-general-version "Proof General Version 4.5-git."
+  (defconst proof-general-version "Proof General Version 4.6-git."
     "Version string identifying Proof General release."))
 
 (defconst proof-general-short-version
@@ -79,7 +79,7 @@
       (string-match "Version \\([^ ]+\\)\\." proof-general-version)
       (match-string 1 proof-general-version))))
 
-(defconst proof-general-version-year "2016")
+(defconst proof-general-version-year "2022")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
