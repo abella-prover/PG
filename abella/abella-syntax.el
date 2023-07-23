@@ -3,7 +3,7 @@
 ;; Copyright (C) 2011-2013 INRIA
 ;;
 ;; Authors: Clement Houtmann <Clement.Houtmann@inria.fr>
-;;          Kaustuv Chaudhuri <kaustuv.@chaudhuri.info>
+;;          Kaustuv Chaudhuri <kaustuv@chaudhuri.info>
 ;;
 
 (require 'font-lock)
