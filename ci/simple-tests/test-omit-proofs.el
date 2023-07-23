@@ -13,10 +13,21 @@
 ;;
 ;; Test that with proof-omit-proofs-option
 ;; - the proof _is_ processed when using a prefix argument
-;; - in this case the proof as normal locked color
+;; - in this case the proof has normal locked color
 ;; - without prefix arg, the proof is omitted
 ;; - the proof has omitted color then
 ;; - stuff before the proof still has normal color
+
+;; Load stuff for `coq--version<'
+(require 'proof-site)
+(proof-ready-for-assistant 'coq)
+(require 'coq-system)
+
+(defconst coq--post-v809 (coq--post-v809)
+  "t if Coq is more recent than 8.8")
+
+(message "omit tests run with Coq version %s; post-v809: %s"
+         (coq-version t) coq--post-v809)
 
 ;; reimplement seq-some from the seq package
 ;; seq-some not present in emacs 24
@@ -42,6 +53,17 @@ If so, return the first non-nil value returned by PRED."
     ;; to process.
     (accept-process-output nil 0.1)))
   
+(defun reset-coq ()
+  "Reset Coq and Proof General.
+Do `proof-shell-exit' to kill Coq and reset the locked region and
+a lot of other internal state of Proof General. Used at the
+beginning of the test when several tests work on the same Coq
+source file."
+  (when (and (boundp 'proof-shell-buffer)
+             (buffer-live-p proof-shell-buffer))
+    (proof-shell-exit t)
+    (message "Coq and Proof General reseted")))
+
 (defun overlay-less (a b)
   "Compare two overlays.
 Return t if overlay A has smaller size than overlay B and should
@@ -52,7 +74,7 @@ therefore have a higher priority."
 
 (defun overlays-at-point-sorted ()
   "Return overlays at point in decreasing order of priority.
-Works only if no overlays has a priority property. Same
+Works only if no overlay has a priority property. Same
 '(overlays-at (point) t)', except that it also works on Emacs <= 25."
   (sort (overlays-at (point) t) 'overlay-less))
 
@@ -76,7 +98,9 @@ In particular, test that with proof-omit-proofs-option configured:
 - stuff before the proof still has normal color "
   (setq proof-omit-proofs-option t
         proof-three-window-enable nil)
+  (reset-coq)
   (find-file "omit_test.v")
+  (goto-char (point-min))
 
   ;; Check 1: check that the proof is valid and omit can be disabled
   (message "1: check that the proof is valid and omit can be disabled")
@@ -151,4 +175,47 @@ In particular, test that with proof-omit-proofs-option configured:
   (should (search-backward "automatic test marker 1" nil t))
   (should (eq (first-overlay-face) 'proof-locked-face))
   (should (search-forward "automatic test marker 2" nil t))
+  (should (eq (first-overlay-face) 'proof-locked-face)))
+
+(ert-deftest omit-proofs-never-omit-hints ()
+  :expected-result :failed
+  "Test that proofs containing Hint are never omitted.
+This test only checks that the face in the middle of the proof is
+the normal `proof-locked-face'.
+
+The sources for the test contain a local attribute in form of
+'#[local]', which has been introduced only in Coq version 8.9."
+  (skip-unless coq--post-v809)
+  (setq proof-omit-proofs-option t
+        proof-three-window-enable nil)
+  (reset-coq)
+  (find-file "omit_test.v")
+  (goto-char (point-min))
+  ;; Check that proofs with Hint commands are never omitted
+  (message "Check that proofs with Hint commands are never omitted")
+  (should (search-forward "automatic test marker 6" nil t))
+  (forward-line -1)
+  (proof-goto-point)
+  (wait-for-coq)
+  (should (search-backward "automatic test marker 5" nil t))
+  (should (eq (first-overlay-face) 'proof-locked-face)))
+
+
+(ert-deftest omit-proofs-never-omit-lets ()
+  :expected-result :failed
+  "Test that proofs for Let local declarations are never omitted.
+This test only checks that the face in the middle of the proof is
+the normal `proof-locked-face'."
+  (setq proof-omit-proofs-option t
+        proof-three-window-enable nil)
+  (reset-coq)
+  (find-file "omit_test.v")
+  (goto-char (point-min))
+  ;; Check that proofs for Let local declarations are never omitted.
+  (message "Check that proofs for Let local declarations are never omitted.")
+  (should (search-forward "automatic test marker 8" nil t))
+  (forward-line -1)
+  (proof-goto-point)
+  (wait-for-coq)
+  (should (search-backward "automatic test marker 7" nil t))
   (should (eq (first-overlay-face) 'proof-locked-face)))
