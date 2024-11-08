@@ -44,7 +44,7 @@
     '(
       ;; Main instances of PG.
 
-      (coq "Coq" "v" nil (".vo" ".glob"))
+      (coq "Coq" "v" nil (".vo" ".glob" ".vok" ".vos"))
       (easycrypt "EasyCrypt" "ec" "\\.eca?\\'")
       (phox "PhoX" "phx" nil (".phi" ".pho"))
       (qrhl "qRHL" "qrhl")
@@ -243,8 +243,8 @@ Note: to change proof assistant, you must start a new Emacs session.")
       proof-assistants
       (mapcar #'car proof-assistant-table))
   "A list of the configured proof assistants.
-Set on startup to contents of environment variable PROOFGENERAL_ASSISTANTS,
-the Lisp variable `proof-assistants', or the contents of `proof-assistant-table'.")
+Set on startup to contents of environment variable PROOFGENERAL_ASSISTANTS, the
+Lisp variable `proof-assistants', or the contents of `proof-assistant-table'.")
 
 ;; Add auto-loads and load-path elements to support the
 ;; proof assistants selected, and define stub major mode functions
@@ -305,7 +305,9 @@ the Lisp variable `proof-assistants', or the contents of `proof-assistant-table'
 	  (fset proofgen-mode mode-stub))
 
 	(dolist (ext (nth 4 tableentry))
-	  (add-to-list 'completion-ignored-extensions ext))
+	  (add-to-list 'completion-ignored-extensions ext)
+          (when (boundp 'dired-omit-extensions)
+	    (add-to-list 'dired-omit-extensions ext)))
 
 	(setq assistants (cdr assistants)))))
 

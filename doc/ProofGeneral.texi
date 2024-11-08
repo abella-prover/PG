@@ -628,7 +628,7 @@ and @ref{Advanced Script Management and Editing}.
 
 @item @i{Script editing mode}@*
 Proof General provides useful facilities for editing proof scripts,
-including syntax hilighting and a menu to jump to particular goals,
+including syntax highlighting and a menu to jump to particular goals,
 definitions, or declarations.
 Special editing functions send lines of proof script to the proof
 assistant, or undo previous proof steps.
@@ -743,7 +743,7 @@ of a common interface mechanism.
 To get more from Proof General and adapt it to your liking, it helps to
 know a little bit about how Emacs lisp packages can be customized via
 the Customization mechanism.  It's really easy to use.  For details,
-@pxref{How to customize}.  @inforef{Customization, ,emacs},
+@pxref{How to customize}.  @xref{Customization,,,emacs},
 for documentation in Emacs.
 
 To get the absolute most from Proof General, to improve it or to adapt
@@ -1527,16 +1527,31 @@ omit complete opaque proofs when larger chunks are asserted. A
 proof is opaque, if its proof script or proof term cannot
 influence the following code. In Coq, opaque proofs are finished
 with @code{Qed}, non-opaque ones with @code{Defined}. When this
-omit proofs feature is configured, complete opaque proofs are
-silently replace with a suitable cheating command
+omit-proofs feature is configured, complete opaque proofs are
+silently replaced with a suitable cheating command
 (@code{Admitted} for Coq) before sending the proof to the proof
 assistant. For files with big proofs this can bring down the
 processing time to 10% with the obvious disadvantage that errors
-in the omitted proofs go unnoticed. For checking the proofs
-occasionally, a prefix argument for @code{proof-goto-point} and
-@code{proof-process-buffer} causes these commands to disregard
-the setting of @code{proof-omit-proofs-option}. Currently, the
-omit proofs feature is only supported for Coq.
+in the omitted proofs go unnoticed. Currently, the omit-proofs
+feature is only supported for Coq.
+
+A prefix argument for @code{proof-goto-point} and
+@code{proof-process-buffer} toggles the omit-proofs feature
+temporarily for this invocation. That is, if
+@code{proof-omit-proofs-option} has been set to @code{t}, a prefix
+argument switches the omit-proofs feature off for these commands. Vice
+versa, if @code{proof-omit-proofs-option} is @code{nil}, a prefix
+argument switches the omit-proofs feature temporarily on for one
+invocation.
+
+Note that the omit-proof feature works by examining the asserted
+region with different regular expressions to recognize proofs and to
+differentiate opaque from non-opaque proofs. This approach is
+necessarily imprecise and it may happen that certain non-opaque proofs
+are classified as opaque ones, thus being omitted and that the proof
+script therefore fails unexpectedly at a later point. Therefore, if a
+proof script fails unexpectedly try processing it again after
+disabling the omit-proofs feature.
 @item
 An often used poor man's solution is to collect all new material
 at the end of one file, regardless where the material really
@@ -1622,7 +1637,7 @@ As experienced Emacs users will know, a @i{prefix argument} is a numeric
 argument supplied by some key sequence typed before a command key
 sequence.  You can supply a specific number by typing @key{Meta} with
 the digits, or a ``universal'' prefix of @kbd{C-u}.  See
-@inforef{Arguments, ,emacs} for more details.  Several Proof General
+@ref{Arguments,,,emacs} for more details.  Several Proof General
 commands, like @code{proof-retract-until-point-interactive}, may accept
 a @i{prefix argument} to adjust their behaviour somehow.
 
@@ -1901,6 +1916,7 @@ General covered in this chapter.
 * View of processed files ::    
 * Retracting across files::     
 * Asserting across files::      
+* Proof status statistic::
 * Automatic multiple file handling::
 * Escaping script management::
 * Editing features::
@@ -2239,6 +2255,146 @@ command with the usual assertion commands, @pxref{Script processing
 commands}. Proof General reminds you that now is a good time to save any
 unmodified buffers.  This is particularly useful as assertion may cause
 the proof assistant to automatically process other files.
+
+
+@node Proof status statistic
+@section Proof status statistic
+@cindex Proof status statistic
+
+The command @code{proof-check-report} (menu @code{Proof-General ->
+Check Opaque Proofs}) generates the proof status of all opaque proofs
+in the current buffer, i.e., it generates an overview that shows which
+of the opaque proofs in the current buffer are currently valid and
+which are failing. When used interactively, the proof status is shown
+in the buffer @code{*proof-check-report*} (as long as
+@code{proof-check-report-buffer} is not changed). Note that incomplete
+proofs, i.e., Admitted proofs for Coq, count as invalid.
+
+The command @code{proof-check-annotate} (menu @code{Proof-General ->
+Annotate Failing Proofs}) modifies the current buffer and places
+comments containing @code{FAIL} on all failing opaque proofs. With
+prefix argument also the passing proofs are annotated with
+@code{PASS}. For configuring the position of these comments, see
+@code{proof-check-annotate-position} and
+@code{proof-check-annotate-right-margin}.
+
+Currently @code{proof-check-report} and @code{proof-check-annotate}
+only work for Coq.
+
+@c TEXI DOCSTRING MAGIC: proof-check-report
+@deffn Command proof-check-report tap &optional batch
+Generate an overview about valid and invalid proofs.@*
+This command completely processes the current buffer and
+generates an overview about all the opaque proofs in it and
+whether their proof scripts are valid or invalid. Note that
+proofs closed with a cheating command (see
+@samp{@code{proof-omit-cheating-regexp}}), i.e., Admitted for Coq, count as
+invalid.
+
+This command makes sense for a development process where invalid
+proofs are permitted and vos compilation and the omit proofs
+feature (see @samp{@code{proof-omit-proofs-configured}}) are used to work at
+the most interesting or challenging point instead of on the first
+invalid proof.
+
+Argument @var{tap}, which can be set by a prefix argument, controls the
+form of the generated overview. Nil, without prefix, gives an
+human readable overview, otherwise it's test anything
+protocol (@var{tap}). Argument @var{batch} controls where the overview goes
+to. If nil, or in an interactive call, the overview appears in
+@samp{@code{proof-check-report-buffer}}. If @var{batch} is a string, it should be a
+filename to write the overview to. Otherwise the overview is
+output via @samp{message} such that it appears on stdout when this
+command runs in batch mode.
+
+In the same way as the omit-proofs feature, this command only
+tolerates errors inside scripts of opaque proofs. Any other error
+is reported to the user without generating an overview. The
+overview only contains those names of theorems whose proof
+scripts are classified as opaque by the omit-proofs feature. For
+Coq for instance, among others, proof scripts terminated with
+@code{'Defined'} are not opaque and do not appear in the generated
+overview.
+
+Note that this command does not (re-)compile required files.
+Dependencies must be compiled before running this commands, for
+instance by asserting all require commands beforehand.
+@end deffn
+
+@c TEXI DOCSTRING MAGIC: proof-check-annotate
+@deffn Command proof-check-annotate annotate-passing &optional save-buffer
+Annotate failing proofs in current buffer with a "@var{fail}" comment.@*
+This function modifies the current buffer in place. Use with
+care!
+
+Similarly to @samp{@code{proof-check-report}}, check all opaque proofs in the
+current buffer. Instead of generating a report, failing proofs
+are annotated with "@var{fail}" in a comment. Existing "@var{pass}" or
+"@var{fail}" comments (e.g., from a previous run) are deleted
+together with the surrounding white space. With prefix argument
+(or when @var{annotate-passing} is non-nil) also passing proofs are
+annotated with a "@var{pass}" comment. Pass and fail comments can be
+placed at the last or second last statement before the opaque
+proof. For Coq this corresponds to the proof using and the
+theorem statement, respectively. In both cases the comment is
+placed at the right margin of the first line, see
+@samp{@code{proof-check-annotate-position}} and
+@samp{@code{proof-check-annotate-right-margin}}.
+
+Interactively, this command does not save the current buffer
+after placing the annotations. With @var{save-buffer} non-nil, the
+current buffer is saved if it has been modified.
+@end deffn
+
+@c TEXI DOCSTRING MAGIC: proof-check-annotate-position
+@defvar proof-check-annotate-position 
+Line for annotating proofs with "@var{pass}" or "@var{fail}" comments.@*
+This option determines the line where @samp{@code{proof-check-annotate}} puts
+comments with "@var{pass}" and "@var{fail}". Value `'theoren' uses the
+first line of the second last statement before the start of the
+opaque proof, which corresponds to the line containing a Theorem
+keyword for Coq. Value `'proof-using' uses the first line of the
+last statement before the opaque proof, which corresponds to the
+Proof using line for Coq.
+@end defvar
+
+@c TEXI DOCSTRING MAGIC: proof-check-annotate-right-margin
+@defvar proof-check-annotate-right-margin 
+Right margin for "@var{pass}" and "@var{fail}" comments.@*
+This option determines the right margin to which
+@samp{@code{proof-check-annotate}} right-aligns the comments with "@var{pass}"
+and "@var{fail}". If nil, the value of @samp{@code{fill-column}} is used.
+@end defvar
+
+
+@xref{Quick and inconsistent compilation} for enabling vos compilation
+inside Proof General and see @xref{Omitting proofs for speed} for the
+omit-proofs feature.
+
+The interactive use of @code{proof-check-report} and
+@code{proof-check-annotate} is limited because they only work on the
+current buffer. However, these commands can also be run in batch mode
+in a script, for instance in a continuous integration environment. To
+run @code{proof-check-report} on a file in batch mode, use
+
+@verbatim
+emacs -batch -l <your-pg-dir>/generic/proof-site.el <file> \
+      --eval '(proof-check-report <tap> <output>)'
+@end verbatim
+
+where @code{<tap>} should be @code{nil} for human readable output and
+@code{t} for test anything protocol. If @code{<output>} is @code{t}
+the proof status appears in the standard output of the Emacs process.
+Otherwise @code{<output>} should be a filename as string in double
+quotes. Then the proof status is written to this file. (If
+@code{output} is @code{nil} or omitted, the proof status is only put
+into the @code{*proof-check-report*} buffer, which does not make much
+sense in a batch command as the one above.)
+
+Using a similar command also @code{proof-check-annotate} can run in
+batch mode in a continuous integration environment, for instance for
+checking that all failing proofs are annotated with @code{FAIL}
+via @code{git diff --exit-code}.
 
 
 @node Automatic multiple file handling
@@ -2755,7 +2911,7 @@ text in the buffer.    This is the font that is configured by the menu
 @end example
 its customization name is @code{unicode-tokens-symbol-font-face}, but
 notice that only the font family aspect of the face is used.  Similarly,
-other fonts can be configured for controling different font families
+other fonts can be configured for controlling different font families
 (script, fraktur, etc).
 
 For symbols, good results are possible by using a proportional font for
@@ -2927,7 +3083,7 @@ This is an inherent problem with outline because it works by modifying
 the buffer.  If you want to use outline with processed scripts, you
 can turn off the @code{Strict Read Only} option. 
 
-See @inforef{Outline Mode, ,emacs} for more information about outline mode.
+See @ref{Outline Mode,,,emacs} for more information about outline mode.
 
 @node Support for completion
 @section Support for completion
@@ -3023,7 +3179,7 @@ General doesn't do this automatically.
 Apart from completion, there are several other operations on tags.  One
 common one is replacing identifiers across all files using
 @code{tags-query-replace}.  For more information on how to use tags,
-@inforef{Tags, ,emacs}.
+@pxref{xref,,,emacs}.
 
 To use tags for completion at the same time as the completion mechanism
 mentioned already, you can use the command @kbd{M-x add-completions-from-tags-table}.
@@ -3157,12 +3313,14 @@ Query the prover about the identifier near mouse click @var{event}.
 @chapter Graphical Proof-Tree Visualization
 @cindex proof-tree visualization
 
-Since version 4.2, Proof General supports proof-tree
+Since version 4.5, Proof General (again) supports proof-tree
 visualization on graphical desktops via the additional program
-Prooftree. Currently, proof-tree visualization is only supported
-for the Coq proof assistant. 
+Prooftree. Currently, proof-tree visualization is only supported for
+the Coq proof assistant. (Proof-tree visualization was already
+supported in version 4.2 but then discontinued in 2017 when Coq 8.7
+dropped the variant of @code{Show Goal} that prooftree relied on.)
 
-This version of Proof General requires Prooftree version 0.11.
+This version of Proof General requires Prooftree version 0.14.
 Check the @uref{http://askra.de/software/prooftree/, Prooftree website},
 to see if some later versions are also compatible. (Because of
 the communication protocol, Proof General is always only
@@ -3379,7 +3537,7 @@ Proof General has been fully loaded.  Proof General is fully loaded when
 you visit a script file for the first time, or if you type @kbd{M-x
 load-library RET proof RET}.
 
-For more help with customize, see @inforef{Customization, ,emacs}.
+For more help with customize, see @ref{Customization,,,emacs}.
 
 
 
@@ -3445,6 +3603,10 @@ Emacs automatically resizing windows between proof steps.
 If you use several frames (the same Emacs in several windows on the
 screen), you can force a frame to stick to showing the goals or
 response buffer.
+
+This option only takes effect if the frame height is bigger than
+4 times @samp{@code{window-min-height}} (i.e., bigger than 16 with default
+values) because there must be enough space to create 3 windows.
 
 The default value is @code{t}.
 @end defopt
@@ -4100,7 +4262,7 @@ and a short-cut for enabling three window mode,
 @cindex file variables
 
 A very convenient way to customize file-specific variables is to use 
-File Variables (@inforef{File Variables, ,emacs}). This feature of
+File Variables (@pxref{File Variables,,,emacs}). This feature of
 Emacs permits to specify values for certain Emacs variables
 when a file is loaded. File variables and their values 
 are written as a list at the end of
@@ -4144,13 +4306,13 @@ And then the right call to make will be done if you use the @kbd{M-x
 compile} command, and the correct @code{coqtop} will be called by
 ProofGeneral. Note that the lines are commented in order to be ignored
 by the proof assistant. It is possible to use this mechanism for all
-variables, @inforef{File Variables, ,emacs}.
+variables, @pxref{File Variables,,,emacs}.
 
 @emph{NOTE:} @code{coq-prog-name} should contain only the @code{coqtop}
 executable, @emph{not the options}.
 
 One can also specify file variables on a per directory basis,
-@inforef{Directory Variables, ,emacs}. You can achieve almost the same
+@pxref{Directory Variables,,,emacs}. You can achieve almost the same
 as above for all the files of a directory by storing
 
 @lisp
@@ -4161,7 +4323,7 @@ as above for all the files of a directory by storing
 into the file @code{.dir-locals.el} in one of the parent directories.
 The value in this file must be an alist that maps mode names to alists,
 where these latter alists map variables to values. You can aso put
-arbitrary code in this file @inforef{Directory Variables, ,emacs}.
+arbitrary code in this file @pxref{Directory Variables,,,emacs}.
 
 @emph{Note:} if you add such content to the @code{.dir-locals.el} file
 you should restart Emacs or revert your buffer.
@@ -4170,7 +4332,7 @@ you should restart Emacs or revert your buffer.
 @section Using abbreviations
 
 A very useful package of Emacs supports automatic expansions of
-abbreviations as you type, @inforef{Abbrevs, ,emacs}.
+abbreviations as you type, @pxref{Abbrevs,,,emacs}.
 
 For example, the proof assistant Coq has many command strings that are
 long, such as ``reflexivity,'' ``Inductive,'' ``Definition'' and
@@ -4211,6 +4373,7 @@ assistant.  It supports most of the generic features of Proof General.
 * Proof using annotations::
 * Multiple File Support::
 * Omitting proofs for speed::
+* Proof status statistic for Coq::
 * Editing multiple proofs::
 * User-loaded tactics::
 * Indentation tweaking::
@@ -4314,10 +4477,12 @@ with the option @code{coq-load-path}, but this is not compatible
 with @code{CoqIde} or @code{coq_makefile}.
 
 @emph{NOTE:} the Coq project file cannot define which version of
-@code{coqtop} is launched. You need either to launch emacs with the
-right executable in the path or use @inforef{File Variables, ,emacs} or
-@inforef{Directory Variables, ,emacs}. See @ref{Using file variables}
-below.
+@code{coqtop} is launched. @xref{Opam-switch-mode support} for how to
+switch between different Coq versions. Alternatively, for a fixed
+version, you need either to launch emacs with the right executable in
+the path or use file variables (@pxref{Using file variables} below or
+@pxref{File Variables,,,emacs}) or directory variables,
+@pxref{Directory Variables,,,emacs}.
 
 @menu
 * Changing the name of the coq project file::
@@ -4338,7 +4503,7 @@ If you only want to change the name of the Coq project file for
 one project you can set the option as local file variable,
 @ref{Using file variables}. This can be done either directly in
 every file or once for all files of a directory tree with a
-@code{.dir-locals.el} file, @inforef{Directory Variables, ,emacs}.
+@code{.dir-locals.el} file, @pxref{Directory Variables,,,emacs}.
 The file @code{.dir-locals.el} should then contain
 
 @lisp
@@ -4543,7 +4708,7 @@ Output from the compilation is only shown in case
 of errors. It then appears in the buffer
 @code{*coq-compile-response*}.
 One can use @code{C-x `} (bound to @code{next-error},
-@inforef{Compilation Mode,,emacs}) to jump to error locations.
+@pxref{Compilation Mode,,,emacs}) to jump to error locations.
 Sometimes the compilation commands do not produce error messages
 with location information, then @code{C-x `} does only work in a
 limited way.
@@ -5078,10 +5243,13 @@ General will perform some unnecessary compilations.
 @section Omitting proofs for speed
 @cindex Omitting proofs for speed
 
-To speed up asserting larger chunks, Proof General can omit
-complete opaque proofs by silently replacing the whole proof
-script with @code{Admitted}, @ref{Script processing commands}.
-This works when
+To speed up asserting larger chunks, Proof General can omit complete
+opaque proofs by silently replacing the whole proof script with
+@code{Admitted}, @ref{Script processing commands}. For files with big
+proofs this can bring down the processing time to 10% with the obvious
+disadvantage that errors in the omitted proofs go unnoticed.
+
+The omit-proof feature works when
 @itemize
 @item
 proofs are not nested
@@ -5101,9 +5269,8 @@ To enable omitting proofs, configure
 @code{proof-omit-proofs-option} or select @code{Proof-General ->
 Quick Options -> Processing -> Omit Proofs}.
 
-With a prefix argument, both @code{proof-goto-point} and
-@code{proof-process-buffer} will temporarily disable the omit
-proofs feature and send the full proof script to Coq.
+For both, @code{proof-goto-point} and @code{proof-process-buffer}, a
+prefix argument toggles the omit-proofs feature for one invocation.
 
 If a nested proof is detected while searching for opaque proofs
 to omit, a warning is displayed and the complete remainder of the
@@ -5119,6 +5286,56 @@ feature to generate these @code{Proof using} annotations (a defective
 form being e.g. @code{Proof using Type} if no section hypothesis is
 used), see the menu command @code{Coq > "Proof using" mode} and
 @ref{Proof using annotations} for details.
+
+Note that the omit-proof feature works by examining the asserted
+region with different regular expressions to recognize proofs and to
+differentiate opaque from non-opaque proofs. This approach is
+necessarily imprecise and the omit-proofs feature may therefore cause
+unexpected errors in the proof script. Currently, Proof General
+correctly handles the following cases for Coq.
+@itemize
+@item
+Commands, such as @code{Hint}, that may appear inside proofs but may
+have effects outside the proof cause the proof to be considered as
+non-opaque.
+@item
+A @code{Let} declaration followed by a proof to supply the term causes
+this proof to be considered as non-opaque. Note that such declarations
+are only handled correctly if the @code{Let} and the proof are
+asserted together. If the proof is asserted separately it may be
+treated as opaque and thus be omitted.
+@end itemize
+
+The following cases are currently not handled correctly.
+@itemize
+@item
+All capitalized commands make Proof General believe the proof is
+non-opaque, even if they have proof-local effect only, such as
+@code{Focus} or @code{Unshelve}.
+@end itemize
+
+
+@node Proof status statistic for Coq
+@section Proof status statistic for Coq
+
+The command @code{proof-check-report} (menu @code{Proof-General ->
+Check Opaque Proofs}) generates the proof status of all opaque proofs
+in the current buffer, i.e., it generates an overview that shows which
+of the opaque proofs in the current buffer are currently valid and
+which are failing, where Admitted proofs count as failing. This
+command is useful for a development process where invalid proofs are
+permitted and vos compilation (@xref{Quick and inconsistent
+compilation}) and the omit proofs feature (@xref{Omitting proofs for
+speed}) are used to work at the most interesting or challenging point
+instead of on the first invalid proof.
+
+The command @code{proof-check-annotate} (menu @code{Proof-General ->
+Annotate Failing Proofs}) can then be used to consistently annotate
+failing proofs with a @code{FAIL} comment or to check, e.g., in
+continuous integration, that such comments are present.
+
+See @xref{Proof status statistic} for more details.
+
 
 @node Editing multiple proofs
 @section Editing multiple proofs
@@ -5302,8 +5519,8 @@ you want to save abbrevs; answer yes.
 @section Proof-Tree Visualization
 @cindex Proof-Tree visualization
 
-Starting with Proof General version 4.2 and Coq version 8.4, Coq
-Proof General has full support for proof-tree visualization, 
+Starting with Proof General version 4.5 and Coq version 8.11, Coq
+Proof General has (again) full support for proof-tree visualization, 
 @pxref{Graphical Proof-Tree Visualization}. To find out which
 versions of Prooftree are compatible with this version of Proof
 General, @pxref{Graphical Proof-Tree Visualization} or the 

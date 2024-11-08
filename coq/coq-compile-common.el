@@ -404,6 +404,22 @@ the ``-vok'' second stage was implemented."
   :type 'number
   :safe 'numberp)
 
+(defcustom coq-compile-extra-coqdep-arguments nil
+  "Additional coqdep arguments for auto compilation as list of strings.
+These arguments are added to all coqdep invocations during
+automatic compilation in addition to the arguments computed
+automatically, for instance by parsing a _CoqProject file."
+  :type '(repeat string)
+  :safe (lambda (v) (cl-every #'stringp v)))
+
+(defcustom coq-compile-extra-coqc-arguments nil
+  "Additional coqc arguments for auto compilation as list of strings.
+These arguments are added to all coqc invocations during
+automatic compilation in addition to the arguments computed
+automatically, for instance by parsing a _CoqProject file."
+  :type '(repeat string)
+  :safe (lambda (v) (cl-every #'stringp v)))
+
 (defcustom coq-compile-command ""
   "External compilation command.  If empty ProofGeneral compiles itself.
 If unset (the empty string) ProofGeneral computes the dependencies of
@@ -522,8 +538,20 @@ or not."
   :type '(repeat regexp)
   :safe (lambda (v) (cl-every #'stringp v)))
 
+(defcustom coq-compile-coqdep-warnings '("+module-not-found")
+  "List of warning options passed to coqdep via `-w` for Coq 8.19 or later.
+List of warning options to be passed to coqdep via command line
+switch `-w`, which is supported from Coq 8.19 onwards. This
+option is ignored for a detected Coq version earlier than 8.19. A
+minus in front of a warning disables the warning, a plus turns
+the warning into an error. This option should contain
+'+module-not-found' to let Proof General reliably detect missing
+modules via an coqdep error."
+  :type '(repeat string)
+  :safe (lambda (v) (cl-every #'stringp v)))
+
 (defcustom coq-coqdep-error-regexp
-  (concat "^\\*\\*\\* Warning: in file .*, library .* is required "
+  (concat "^\\(\\*\\*\\* \\)?Warning: in file .*, library[ \n].* is required "
           "and has not been found")
   "Regexp to match errors in the output of coqdep.
 coqdep indicates errors not always via a non-zero exit status,
@@ -666,6 +694,9 @@ Changes the suffix from .vo to .vok.  VO-OBJ-FILE must have a .vo suffix."
 
 ;;; manage coq--compile-response-buffer
 
+(defconst coq--compile-response-initial-content "-*- mode: compilation; -*-\n\n"
+  "Content of `coq--compile-response-buffer' after initialization")
+
 ;; XXX apparently nobody calls this with display equal to nil
 (defun coq-compile-display-error (command error-message display)
   "Display COMMAND and ERROR-MESSAGE in `coq--compile-response-buffer'.
@@ -708,7 +739,7 @@ the command whose output will appear in the buffer."
     ;; the first line are not found for some reason ...
     (let ((inhibit-read-only t))
       (with-current-buffer buffer-object
-        (insert "-*- mode: compilation; -*-\n\n")
+        (insert coq--compile-response-initial-content)
 	(when command
 	  (insert command "\n"))))))
 

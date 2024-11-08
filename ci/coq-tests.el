@@ -152,13 +152,13 @@ then evaluate the BODY function and finally tear-down (exit Coq)."
               (setq proof-splash-enable nil)
               (normal-mode) ;; or (coq-mode)
 	      (coq-set-flags t flags)
-              (coq-mock body))))
-      (coq-test-exit)
-      (coq-set-flags nil flags)
-      (not-modified nil) ; Clear modification  
-      (kill-buffer buffer) 
-      (when rmfile (message "Removing file %s ..." rmfile))
-      (ignore-errors (delete-file rmfile)))))
+              (coq-mock body)))
+        (coq-test-exit)
+        (coq-set-flags nil flags)
+        (not-modified nil) ; Clear modification  
+        (kill-buffer buffer) 
+        (when rmfile (message "Removing file %s ..." rmfile))
+        (ignore-errors (delete-file rmfile))))))
 
 (defun coq-test-goto-before (comment)
   "Go just before COMMENT (a unique string in the .v file).
@@ -182,6 +182,10 @@ For example, COMMENT could be (*test-definition*)"
 (defun coq-should-buffer-string (str &optional buffer-name)
   "Particular case of `coq-should-buffer-regexp'."
   (coq-should-buffer-regexp (regexp-quote str) buffer-name))
+
+(defun coq-should-buffer-contain-string (str &optional buffer-name)
+  "Particular case of `coq-should-buffer-regexp'."
+  (coq-should-buffer-regexp (concat ".*\\(" (regexp-quote str) "\\).*") buffer-name))
 
 ;; TODO: Use https://github.com/rejeep/ert-async.el
 ;; and/or ERT https://www.gnu.org/software/emacs/manual/html_node/ert/index.html
@@ -251,38 +255,114 @@ For example, COMMENT could be (*test-definition*)"
    (coq-test-full-path "test_stepwise.v")
    (lambda ()
      (coq-test-goto-before " (*test-lemma2*)")
-     (let ((proof-point (save-excursion (coq-test-goto-after "(*error*)")))) 
-     (proof-goto-point)
-     (proof-shell-wait)
-     (coq-should-buffer-string "Error: Unable to unify \"false\" with \"true\".")
-     (should (equal (proof-queue-or-locked-end) proof-point))))))
+     ;; redefining this function locally so that self removing spans
+     ;; remain longer. Cf span.el
+     (cl-letf (((symbol-function 'span-make-self-removing-span)
+                (lambda (beg end &rest props)
+                  (let ((ol (span-make beg end)))
+                    (while props
+                      (overlay-put ol (car props) (cadr props))
+                      (setq props (cddr props)))
+                    (add-timeout 10 'delete-overlay ol)
+                    ol))))
+       
+       (let ((proof-point (save-excursion (coq-test-goto-after "(*error*)") (point)))
+             (proof-cmd-point (save-excursion
+                                (coq-test-goto-after "(*error*)")
+                                (re-search-forward "reflexivity")
+                                (re-search-backward "reflexivity")))) 
+         (proof-goto-point)
+         (proof-shell-wait)
+         (coq-should-buffer-string "Error: Unable to unify \"false\" with \"true\".")
+         ;; checking that there is an overlay with warning face exactly
+         ;; on "reflexivity". WARNING: this overlat lasts only for 2
+         ;; secs, if this test is done in a (very) slow virtual machine
+         ;; this may fail.
+         (should (equal (point) proof-cmd-point))
+         (let ((sp (span-at proof-cmd-point 'face)))
+           (should sp)
+           (should (equal (span-property sp 'face) 'proof-warning-face))
+           (should (equal (span-start sp) proof-cmd-point))
+           ;; coq-8.11 used to hace ending ps shifted by one
+           (should (or (equal (span-end sp) (+ proof-cmd-point (length "reflexivity")))
+                       (equal (span-end sp) (+ 1 proof-cmd-point (length "reflexivity")))))
+           )
+         (should (equal (proof-queue-or-locked-end) proof-point)))))))
 
 
-(ert-deftest 060_coq-test-wholefile ()
-  ;; test_wholefile.v triggers a fatal warning in 8.17, see also #698
-  :expected-result (if (coq--is-v817) :failed :passed)
-  "Test `proof-process-buffer'."
+;; Testing the error location for curly braces specifically. Coq bug
+;; #19355 (coq <= 8.20) needs to be worked around.
+(ert-deftest 51_coq-test-error-highlight ()
+  "Test error highlghting for curly brace."
   (coq-fixture-on-file
-   (coq-test-full-path "test_wholefile.v")
+   (coq-test-full-path "test_error_loc_1.v")
    (lambda ()
-     (let ((proof-point (save-excursion
-			  (coq-test-goto-before "Theorem")
-			  (search-forward "Qed."))))
-     (proof-process-buffer)
-     (proof-shell-wait)
-     (should (equal (proof-queue-or-locked-end) proof-point))))))
+     (coq-test-goto-before " (*test-lemma*)")
+     ;; redefining this function locally so that self removing spans
+     ;; remain longer. Cf span.el
+     (cl-letf (((symbol-function 'span-make-self-removing-span)
+                (lambda (beg end &rest props)
+                  (let ((ol (span-make beg end)))
+                    (while props
+                      (overlay-put ol (car props) (cadr props))
+                      (setq props (cddr props)))
+                    (add-timeout 10 'delete-overlay ol)
+                    ol))))
+       
+       (let ((proof-point (save-excursion (coq-test-goto-after "(*error*)") (point)))
+             (proof-cmd-point (save-excursion
+                                (coq-test-goto-after "(*error*)")
+                                (re-search-forward "}")
+                                (re-search-backward "}")))) 
+         (coq-test-goto-before " (*test-lemma*)")
+         (proof-goto-point)
+         (proof-shell-wait)
+         (coq-should-buffer-string "Error: The proof is not focused")
+         ;; checking that there is an overlay with warning face exactly
+         ;; on "reflexivity". WARNING: this overlat lasts only for 2
+         ;; secs, if this test is done in a (very) slow virtual machine
+         ;; this may fail.
+         (should (equal (point) proof-cmd-point))
+         (let ((sp (span-at proof-cmd-point 'face)))
+           (should sp)
+           (should (equal (span-property sp 'face) 'proof-warning-face))
+           (should (equal (span-start sp) proof-cmd-point))
+           ;; coq-8.11 used to hace ending ps shifted by one
+           (should (or (equal (span-end sp) (+ proof-cmd-point (length "}")))
+                       (equal (span-end sp) (+ 1 proof-cmd-point (length "}")))))
+           )
+         (should (equal (proof-queue-or-locked-end) proof-point)))))))
 
-
-(ert-deftest 070_coq-test-regression-wholefile-no-proof ()
-  "Regression test for no proof bug"
-  (coq-fixture-on-file
-   (coq-test-full-path "test_wholefile.v")
-   (lambda ()
-     (proof-process-buffer)
-     (proof-shell-wait)
-     (goto-char (point-min))
-     (insert "(*.*)")
-     (should (equal (proof-queue-or-locked-end) (point-min))))))
+;; Disable tests that use test_wholefile.v. The file is outdated, uses
+;; deprecated features, is prone to caues Coq errors and therefore
+;; causes the tests to fail. See #698 and commit
+;; bd3615b442974f1e1c3fca0252e081a05525d26b.
+;; 
+;; (ert-deftest 060_coq-test-wholefile ()
+;;   ;; test_wholefile.v triggers a fatal warning in 8.17, see also #698
+;;   :expected-result (if (coq--is-v817) :failed :passed)
+;;   "Test `proof-process-buffer'."
+;;   (coq-fixture-on-file
+;;    (coq-test-full-path "test_wholefile.v")
+;;    (lambda ()
+;;      (let ((proof-point (save-excursion
+;; 			  (coq-test-goto-before "Theorem")
+;; 			  (search-forward "Qed."))))
+;;      (proof-process-buffer)
+;;      (proof-shell-wait)
+;;      (should (equal (proof-queue-or-locked-end) proof-point))))))
+;; 
+;; 
+;; (ert-deftest 070_coq-test-regression-wholefile-no-proof ()
+;;   "Regression test for no proof bug"
+;;   (coq-fixture-on-file
+;;    (coq-test-full-path "test_wholefile.v")
+;;    (lambda ()
+;;      (proof-process-buffer)
+;;      (proof-shell-wait)
+;;      (goto-char (point-min))
+;;      (insert "(*.*)")
+;;      (should (equal (proof-queue-or-locked-end) (point-min))))))
 
 (ert-deftest 080_coq-test-regression-show-proof-stepwise()
   "Regression test for the \"Show Proof\" option"
@@ -322,12 +402,12 @@ For example, COMMENT could be (*test-definition*)"
      (proof-assert-next-command-interactive) ;; pas the comment
      (proof-assert-next-command-interactive)
      (proof-shell-wait)
+     ;; The order of these messages has changed btween 8.19 and 8.20
+     ;; so we check each part separatelty
+     (coq-should-buffer-contain-string "The command has indeed failed with message:")
+     (coq-should-buffer-contain-string "Tactic failure: Cannot solve this goal." "*coq*")
      (if (coq--version< (coq-version) "8.10.0")
-         (coq-should-buffer-string "The command has indeed failed with message:
-In nested Ltac calls to \"now (tactic)\" and \"easy\", last call failed.
-Tactic failure: Cannot solve this goal.")
-       (coq-should-buffer-string "The command has indeed failed with message:
-Tactic failure: Cannot solve this goal." "*coq*")))))
+         (coq-should-buffer-contain-string "In nested Ltac calls to \"now (tactic)\" and \"easy\", last call failed.")))))
 
 
 ;; (coq-should-buffer-regexp (regexp-quote "The command has indeed failed with message: Tactic failure: Cannot solve this goal.") "*response*")
@@ -343,11 +423,11 @@ Tactic failure: Cannot solve this goal." "*coq*")))))
      (proof-assert-next-command-interactive) ;; pas the comment
      (proof-assert-next-command-interactive)
      (proof-shell-wait)
-     ;; If coq--post-v811, it should be "Show Proof Diffs." otherwise "Show Proof."
-     (coq-should-buffer-string "The command has indeed failed with message:
-In nested Ltac calls to \"now (tactic)\" and \"easy\", last call failed.
-Tactic failure: Cannot solve this goal."))))
- 
+     ;; The order of these messages has changed btween 8.19 and 8.20
+     ;; so we check each part separatelty
+     (coq-should-buffer-contain-string "The command has indeed failed with message:")
+     (coq-should-buffer-contain-string "Tactic failure: Cannot solve this goal." "*coq*")
+     (coq-should-buffer-contain-string "In nested Ltac calls to \"now (tactic)\" and \"easy\", last call failed."))))
 
 (ert-deftest 100_coq-test-proof-using-proof ()
   "Test for insertion of Proof using annotations"
@@ -367,9 +447,6 @@ Tactic failure: Cannot solve this goal."))))
        (backward-char 3)
        (should (span-at (point) 'proofusing))))))
  
-
-
-
 (provide 'coq-tests)
 
 ;;; coq-tests.el ends here

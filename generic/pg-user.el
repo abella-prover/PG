@@ -26,6 +26,13 @@
 
 (require 'proof-script)	        ; we build on proof-script
 
+;; For seq-group-by inside `proof-check-report'. This is apparently
+;; not automatically loaded in Emacs 26.3. In a real PG session it is
+;; apparently present, but not if `proof-check-proof' is invoked from
+;; the shell as described in the user manual.
+;; XXX Delete this when support for Emacs 26 is dropped (hopefully in Q4/2025).
+(require 'seq)
+
 (eval-when-compile (require 'cl-lib))   ;cl-decf
 (defvar which-func-modes)               ; Defined by which-func.
 
@@ -595,6 +602,339 @@ last use time, to discourage saving these into the users database."
   (let ((case-fold-search proof-case-fold-search))
     (complete arg)))
 
+
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; Check validity of proofs
+;;
+
+(defun proof-check-annotate-source (proof-results annotate-passing)
+  "Annotate proofs in current buffer according to PROOF-RESULTS.
+PROOF-RESULTS must be the return value of `proof-check-proofs' or
+`proof-check-chunks' for the current buffer. This function
+annotates failing proofs with a comment containing \"FAIL\" and,
+if annotate-passing is non-nil, also passing proofs with
+\"PASS\". The annotation will be right aligned in the line
+according to `proof-check-annotate-position'. The position for
+right alignment is configured in
+`proof-check-annotate-right-margin'. Existing \"PASS\" or
+\"FAIL\" annotations are deleted together with the surrounding
+white space."
+  (let ((goal-column (or proof-check-annotate-right-margin fill-column)))
+    (save-excursion
+      (dolist (pr (nreverse proof-results))
+        (let ((pass (car pr))
+              (annot-pos
+               (cond ((eq proof-check-annotate-position 'theorem) (nth 2 pr))
+                     ((eq proof-check-annotate-position 'proof-using) (nth 3 pr))
+                     (t (error
+                         "Invalid value in `proof-check-annotate-position'"))))
+              eol-pos fill)
+          (goto-char annot-pos)
+          ;; Now at the start of the span. Usually, this is right
+          ;; behind the previous command, at the end of the line. Move
+          ;; to the start of the command.
+          (re-search-forward "[[:blank:]\n]*")
+          (end-of-line)
+          (when (looking-back "(\\* \\(PASS\\|FAIL\\) \\*)")
+            (delete-char -10)
+            (delete-horizontal-space))
+          (when (or annotate-passing (not (car pr)))
+            ;; Maybe there was no annotation in this line before, need
+            ;; to delete trailing space.
+            (delete-horizontal-space)
+            (setq eol-pos (point))
+            (beginning-of-line)
+            (setq fill (- goal-column (- eol-pos (point)) 10))
+            (when (< fill 1)
+              (setq fill 1))
+            (end-of-line)
+            (insert (make-string fill ? )
+                    "(* " (if pass "PASS" "FAIL") " *)")))))))
+          
+(defun proof-check-generate-report (proof-results tap batch)
+  "Report `proof-check-proofs' results in PROOF-RESULTS in special buffer.
+Report the results of `proof-check-proofs' in buffer
+`proof-check-report-buffer' in human readable form or, if TAP is
+not nil, in test anything protocol (TAP). If BATCH is not nil,
+report the results via message, such that they appear on stdout
+when Emacs runs in batch mode or, when BATCH is a string, write
+the results to the file denoted by BATCH."
+  (let* ((ok-fail (seq-group-by #'car proof-results))
+         (frmt "  %-4s %s")
+         (frmt-face (propertize frmt 'face 'error))
+         (count 1)
+         (inhibit-read-only t)          ; for the report buffer, below
+         coq-proj-dir src-file)
+
+    ;; determine a relative file name for current buffer
+    (when buffer-file-name
+      (setq coq-proj-dir (locate-dominating-file buffer-file-name
+                                                 coq-project-filename)))
+    (if coq-proj-dir
+        (setq src-file (file-relative-name buffer-file-name coq-proj-dir))
+      (setq src-file (buffer-name)))
+
+    ;; generate header
+    (with-current-buffer (get-buffer-create proof-check-report-buffer)
+      (read-only-mode)
+      (buffer-disable-undo)
+      (erase-buffer)
+      (if tap
+          (insert (format "TAP version 13\n1..%d\n" (length proof-results)))
+        ;; human output
+        (insert
+         (propertize (concat "Proof check results for " src-file) 'face 'bold)
+         "\n\n")
+        (insert
+         (format
+          (propertize "%d opaque proofs recognized: %d successful " 'face 'bold)
+          (length proof-results)
+          (length (cdr (assoc t ok-fail)))))
+        (insert (format (propertize "%d FAILING" 'face 'error 'face 'bold)
+                        (length (cdr (assoc nil ok-fail)))))
+        (insert "\n\n"))
+      (dolist (pr proof-results)
+        (if tap
+            (progn
+              (insert (format "%sok %d %s\n"
+                              (if (car pr) "" "not ")
+                              count
+                              (cadr pr)))
+              (setq count (1+ count)))
+          ;; human readable
+          (insert (format (if (car pr) frmt frmt-face)
+                          (if (car pr) "OK  " "FAIL")
+                          (cadr pr)))
+          (insert "\n")))
+      (if batch
+          (progn
+            (insert "\n\n")
+            (if (stringp batch)
+                (write-region (point-min) (point-max) batch)
+              (message "%s"
+                       (buffer-substring-no-properties
+                        (point-min) (point-max)))))
+        (goto-char (point-min))
+        (display-buffer (current-buffer))))))
+
+(defun proof-check-chunks (chunks)
+  "Worker function for `proof-check-proofs' for processing CHUNKS.
+CHUNKS must be the reversed result of `proof-script-omit-filter'
+for a whole buffer. (Only the top-level must be reversed, the
+commands inside the chunks must be as returned by
+`proof-script-omit-filter', that is in reversed order.) CHUNKS
+must not contain any 'nested-proof chunk.
+
+This function processes the content of CHUNKS normally by
+asserting them one by one. Any error reported inside a 'no-proof
+chunk is reported as error to the user. 'proof chunks containing
+errors are silently replaced by
+`proof-script-proof-admit-command'. The result is a list of proof
+status results, one for each 'proof chunk in the same order. Each
+proof-status result is a list of 4 elements as follows.
+- 1st: proof status as `t' or `nil'. Proofs closed with a match
+  of `proof-omit-cheating-regexp', if defined, count as failing,
+  i.e., their status is `nil'.
+- 2nd: the name of the proof as reported by
+  `proof-get-proof-info-fn'.
+- 3rd: Position of the start of the span containing the theorem
+  to prove. More precisely, it is the second last span of the
+  'no-proof chunk before the 'proof chunk. Note that spans
+  usually contain preceeding white space. Therefore this position
+  is not necessarily the first letter of the keyword introducing
+  the theorem statement.
+- 4rd: Position of the start of the span containing \"Proof
+  using\". More precisely, it is the last span in the 'no-proof
+  chunk before the proof."
+  (let (proof-results current-proof-state-and-name proof-start-points)
+    (while chunks
+      (let* ((chunk (car chunks))       ; cdr at end
+             (this-mode (car chunk))
+             (next-mode (car (car (cdr chunks))))
+             (vanillas-rev (nth 1 chunk))
+             ;; add 'empty-action-list flag to last item to avoid the
+             ;; call to `proof-shell-empty-action-list-command'
+             (last-item (car vanillas-rev))
+             (2nd-last-item (cadr vanillas-rev))
+             (last-span-end (span-end (car last-item)))
+             (new-last-item (list (nth 0 last-item) (nth 1 last-item)
+                                  (nth 2 last-item)
+                                  (cons 'empty-action-list (nth 3 last-item))))
+             (vanillas-rev-updated (cons new-last-item (cdr vanillas-rev)))
+             error
+             cheated)
+        ;; if this is a proof chunk the next must be no-proof or must not exist
+        (cl-assert (or (not (eq this-mode 'proof))
+                       (or (eq next-mode 'no-proof) (eq next-mode nil)))
+                   nil "proof-check: two adjacent proof chunks")
+        (proof-set-queue-endpoints (proof-unprocessed-begin) last-span-end)
+        (proof-add-to-queue (nreverse vanillas-rev-updated) 'advancing)
+        (proof-shell-wait)
+        ;; (redisplay)
+        (unless (eq last-span-end
+                    (and proof-locked-span (span-end proof-locked-span)))
+          ;; not all the spans have been asserted - there was some error
+          (setq error t))
+        (when (and error (eq this-mode 'no-proof))
+          ;; all non-opaque stuff should be error free, abort and tell
+          ;; the user
+          (goto-char (proof-unprocessed-begin))
+          (when (looking-at "$")
+            (forward-line 1))
+          (error "Error encountered outside opaque proofs after line %d"
+                 (line-number-at-pos)))
+            
+        (cond
+         ((and (eq this-mode 'no-proof) (eq next-mode 'proof))
+          ;; non-opaque stuff has been processed error free, next
+          ;; chunk is an opaque proof - record information needed next
+          ;; round
+          (setq current-proof-state-and-name
+                (funcall proof-get-proof-info-fn))
+          (cl-assert (cadr current-proof-state-and-name)
+                     nil "proof-check: no proof name at proof start")
+          (setq proof-start-points
+                (list (span-start (car 2nd-last-item)) ; start of Lemma
+                      (span-start (car last-item)))))  ; start of Proof using
+
+         ((eq this-mode 'proof)         ; implies next-mode is no-proof
+          ;; opaque proof chunk processed - with or without error
+          (when error
+            ;; opaque proof failed, retract, admit, and record error
+            (proof-add-to-queue
+             (list
+              (list nil (list (funcall proof-retract-command-fn
+                                       (car current-proof-state-and-name)))
+                    'proof-done-invisible (list 'invisible))
+              (list nil (list proof-script-proof-admit-command)
+                    'proof-done-invisible (list 'invisible)))
+             'advancing)
+            (proof-shell-wait)
+            (proof-set-locked-end last-span-end)
+            (cl-assert (not (cadr (funcall proof-get-proof-info-fn)))
+                       nil "proof-check: still in proof after admitting"))
+          (when (and proof-omit-cheating-regexp
+                     ;; check if somebody cheated - cheated proofs
+                     ;; should count as failing
+                     (proof-string-match
+                      proof-omit-cheating-regexp
+                      (mapconcat #'identity (nth 1 last-item) " ")))
+            (setq cheated t))
+          (push
+           (cons (not (or error cheated))
+                 (cons (cadr current-proof-state-and-name) proof-start-points))
+           proof-results)))
+        
+        (setq chunks (cdr chunks))))
+    (nreverse proof-results)))
+    
+(defun proof-check-proofs ()
+  "Check proofs in current buffer and return a list of proof status results.
+This is the internal worker for `proof-check-report' and
+`proof-check-annotate'. 
+
+Reset scripting and then check all opaque proof in the current
+buffer, relying on the omit-proofs feature, see
+`proof-script-omit-filter' and `proof-omit-proofs-configured'.
+The results are returned as list of proof status results (a list
+of 4-element lists), see `proof-check-chunks'.
+
+This function does not (re-)compile required files."
+  (unless (and proof-omit-proofs-configured
+               proof-get-proof-info-fn
+               proof-retract-command-fn)
+    (error
+     "proof-check-proofs has not been configured for your proof assistant"))
+  ;; kill proof assistant and retract completely
+  (when (buffer-live-p proof-shell-buffer)
+    (proof-shell-exit t))
+  ;; initialize scripting - taken from `proof-assert-until-point'
+  (proof-activate-scripting nil 'advancing)
+  (let* ((semis (proof-segment-up-to-using-cache (point-max)))
+    	 (vanillas (proof-semis-to-vanillas
+                    semis
+                    '(no-response-display no-goals-display)))
+         (chunks-rev (proof-script-omit-filter vanillas))
+         (last-chunk (car chunks-rev))
+         (chunks (nreverse chunks-rev))
+         proof-results)
+    (when (eq (car last-chunk) 'nested-proof)
+      (error "Nested proof detected at line %d" (nth 2 last-chunk)))
+    (cl-assert (not (eq (caar chunks) 'proof))
+               nil "proof-check: first chunk cannot be a proof")
+    (setq proof-results (proof-check-chunks chunks))
+    (proof-shell-exit t)
+    proof-results))
+
+(defun proof-check-report (tap &optional batch)
+  "Generate an overview about valid and invalid proofs.
+This command completely processes the current buffer and
+generates an overview about all the opaque proofs in it and
+whether their proof scripts are valid or invalid. Note that
+proofs closed with a cheating command (see
+`proof-omit-cheating-regexp'), i.e., Admitted for Coq, count as
+invalid.
+
+This command makes sense for a development process where invalid
+proofs are permitted and vos compilation and the omit proofs
+feature (see `proof-omit-proofs-configured') are used to work at
+the most interesting or challenging point instead of on the first
+invalid proof.
+
+Argument TAP, which can be set by a prefix argument, controls the
+form of the generated overview. Nil, without prefix, gives an
+human readable overview, otherwise it's test anything
+protocol (TAP). Argument BATCH controls where the overview goes
+to. If nil, or in an interactive call, the overview appears in
+`proof-check-report-buffer'. If BATCH is a string, it should be a
+filename to write the overview to. Otherwise the overview is
+output via `message' such that it appears on stdout when this
+command runs in batch mode.
+
+In the same way as the omit-proofs feature, this command only
+tolerates errors inside scripts of opaque proofs. Any other error
+is reported to the user without generating an overview. The
+overview only contains those names of theorems whose proof
+scripts are classified as opaque by the omit-proofs feature. For
+Coq for instance, among others, proof scripts terminated with
+'Defined' are not opaque and do not appear in the generated
+overview.
+
+Note that this command does not (re-)compile required files.
+Dependencies must be compiled before running this commands, for
+instance by asserting all require commands beforehand."
+  (interactive "P")
+  (proof-check-generate-report (proof-check-proofs) tap batch))
+
+(defun proof-check-annotate (annotate-passing &optional save-buffer)
+  "Annotate failing proofs in current buffer with a \"FAIL\" comment.
+This function modifies the current buffer in place. Use with
+care!
+
+Similarly to `proof-check-report', check all opaque proofs in the
+current buffer. Instead of generating a report, failing proofs
+are annotated with \"FAIL\" in a comment. Existing \"PASS\" or
+\"FAIL\" comments (e.g., from a previous run) are deleted
+together with the surrounding white space. With prefix argument
+(or when ANNOTATE-PASSING is non-nil) also passing proofs are
+annotated with a \"PASS\" comment. Pass and fail comments can be
+placed at the last or second last statement before the opaque
+proof. For Coq this corresponds to the proof using and the
+theorem statement, respectively. In both cases the comment is
+placed at the right margin of the first line, see
+`proof-check-annotate-position' and
+`proof-check-annotate-right-margin'.
+
+Interactively, this command does not save the current buffer
+after placing the annotations. With SAVE-BUFFER non-nil, the
+current buffer is saved if it has been modified."
+  (interactive "P")
+  (proof-check-annotate-source (proof-check-proofs) annotate-passing)
+  (when save-buffer
+    (save-buffer)))
 
 
 

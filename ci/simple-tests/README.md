@@ -12,6 +12,18 @@ coq-test-par-job-needs-compilation-quick
   possible cases
 coq-test-prelude-correct
 : test that the Proof General prelude is correct
+coq-test-goals-present
+: test that Proof General shows goals correctly in various
+  situations
+coq-test-three-window
+: Test three-pane mode for different frame sizes, including ones that
+  are too small for three windows.
+coq-test-proof-stat
+: test proof-check-proofs
+coq-proof-stat-batch-test
+: Batch mode test for proof-check-proofs. There is no Emacs lisp file
+  for this test. It is programmed out in the Makefile goal
+  coq-proof-stat-batch-test.
 
 # Overview of existing tests for qRHL
 

@@ -745,14 +745,25 @@ ignored, because they can never participate in a cycle."
     (mapcar (lambda (j) (get j 'src-file)) cycle)))
 
 
-;;; map coq module names to files, using synchronously running coqdep
+;;; map coq module names to files, using coqdep
+
+(defun coq-par-coqdep-warning-arguments ()
+  "Return a fresh list with the warning command line arguments for coqdep.
+Warnings (`-w`) are supported in coqdep from 8.19 onwards.
+Therefore return the empty list for a detected Coq version
+earlier than 8.19."
+  (if (and (coq--post-v818) (consp coq-compile-coqdep-warnings))
+      (list "-w" (mapconcat #'identity coq-compile-coqdep-warnings ","))
+    ()))
 
 (defun coq-par-coqdep-arguments (lib-src-file clpath)
   "Compute the command line arguments for invoking coqdep on LIB-SRC-FILE.
 Argument CLPATH must be `coq-load-path' from the buffer
 that triggered the compilation, in order to provide correct
 load-path options to coqdep."
-  (nconc (coq-coqdep-prog-args clpath
+  (nconc (copy-sequence coq-compile-extra-coqdep-arguments) ; copy for nconc
+         (coq-par-coqdep-warning-arguments)
+         (coq-coqdep-prog-args clpath
                                (file-name-directory lib-src-file)
                                (coq--pre-v85))
          (list lib-src-file)))
@@ -762,13 +773,16 @@ load-path options to coqdep."
 Argument CLPATH must be `coq-load-path' from the buffer
 that triggered the compilation, in order to provide correct
 load-path options to coqdep."
-  (nconc (coq-coqc-prog-args clpath (file-name-directory lib-src-file) (coq--pre-v85))
+  (nconc (copy-sequence coq-compile-extra-coqc-arguments) ; copy for nconc
+         (coq-coqc-prog-args clpath
+                             (file-name-directory lib-src-file)
+                             (coq--pre-v85))
          (list lib-src-file)))
 
 (defun coq-par-analyse-coq-dep-exit (status output command)
   "Analyse output OUTPUT of coqdep command COMMAND with exit status STATUS.
 Returns the list of .vo dependencies if there is no error. Otherwise,
-writes an error message into `coq-compile-response-buffer', makes
+writes an error message into `coq--compile-response-buffer', makes
 this buffer visible and returns a string.
 
 This function does always return .vo dependencies, regardless of the

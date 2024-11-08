@@ -19,6 +19,36 @@
 ;; Mode for buffer which interacts with proof assistant.
 ;; Includes management of a queue of commands waiting to be sent.
 ;;
+;; A big portion of the code in this file implements the callback
+;; function that Emacs calls when output arrives from the proof
+;; assistant. This callback implements a major feature of Proof
+;; General: Sending one command after the other to the proof assistant
+;; and processing/displaying the reply.
+;;
+;; The following documents the call graph of important functions that
+;; contribute to this callback. The entry point is
+;; `proof-shell-filter-wrapper', which is configured in
+;; `scomint-output-filter-functions'. Sending the next comand to the
+;; proof assistant and calling the callbacks of the spans happens in
+;; `proof-shell-exec-loop'.
+;;
+;;   proof-shell-filter-wrapper
+;;   -> proof-shell-filter
+;;      -> proof-shell-process-urgent-messages
+;;         -> proof-shell-process-urgent-message
+;;      -> proof-shell-filter-manage-output
+;;         -> proof-shell-handle-immediate-output
+;;         -> proof-shell-exec-loop
+;;            -> proof-tree-check-proof-finish
+;;            -> proof-shell-handle-error-or-interrupt
+;;            -> proof-shell-insert-action-item
+;;            -> proof-shell-invoke-callback
+;;            -> proof-release-lock
+;;         -> proof-shell-handle-delayed-output
+;;         -> proof-tree-handle-delayed-output
+;;      -> proof-release-lock
+;;   -> proof-start-prover-with-priority-items-maybe
+;;
 
 ;;; Code:
 
@@ -31,7 +61,6 @@
 ;; declare a few functions and variables from proof-tree - if we
 ;; require proof-tree the compiler complains about a recusive
 ;; dependency.
-(declare-function proof-tree-urgent-action "proof-tree" (flags))
 (declare-function proof-tree-handle-delayed-output "proof-tree"
 		  (old-proof-marker cmd flags span))
 ;; without the nil initialization the compiler still warns about this variable
@@ -114,7 +143,8 @@ and to be executed last is at the head.")
   (condition-case err
       (funcall (nth 2 listitem) (car listitem))
     (error
-     (message "error escaping proof-shell-invoke-callback: %s" err)
+     (message "error escaping proof-shell-invoke-callback %s for command %s: %s"
+              (nth 2 listitem) (nth 1 listitem) err)
      nil)))
 
 (defvar proof-second-action-list-active nil
@@ -824,7 +854,10 @@ after a completed proof."
     (setq proof-shell-last-output-kind 'interrupt)
     (proof-shell-handle-error-or-interrupt 'interrupt flags))
    
-   ((proof-re-search-forward-safe proof-shell-error-regexp end t)
+   ((and (save-excursion
+           (proof-re-search-forward-safe proof-shell-error-regexp end t))
+         (not (proof-re-search-forward-safe proof-shell-no-error-regexp end t)))
+
     (setq proof-shell-last-output-kind 'error)
     (proof-shell-handle-error-or-interrupt 'error flags))
 
@@ -1206,11 +1239,12 @@ contains only invisible elements for Prooftree synchronization."
 	;; proof-action-list and where the next item has not yet been
 	;; sent to the proof assistant. This is therefore one of the
 	;; few points where it is safe to manipulate
-	;; proof-action-list. The urgent proof-tree display actions
-	;; must therefore be called here, because they might add some
-	;; Show actions at the front of proof-action-list.
-	(if proof-tree-external-display
-	    (proof-tree-urgent-action flags))
+	;; proof-action-list.
+
+        ;; Call the urgent action of prooftree, if the display is on.
+        ;; This might enqueue items in the priority action list.
+        (when proof-tree-external-display
+          (proof-tree-check-proof-finish item))
 
         ;; Add priority actions to the front of proof-action-list.
         ;; Delay adding of priority items until there is no priority
@@ -1266,8 +1300,8 @@ contains only invisible elements for Prooftree synchronization."
 	 	    proof-action-list)
 	 	   ;; If the last command in proof-action-list is a "Show Proof" form then return t
 	 	   (when last-command
-             (proof-shell-string-match-safe
-              proof-show-proof-diffs-regexp last-command)))))))))
+                     (proof-shell-string-match-safe
+                      proof-show-proof-diffs-regexp last-command)))))))))
 
 
 (defun proof-shell-insert-loopback-cmd  (cmd)
@@ -1331,9 +1365,6 @@ ends with text matching `proof-shell-eager-annotation-end'."
      ;; NB: xml-parse-region ignores junk before XML
      (xml-parse-region start end)))
    
-   ((proof-looking-at-safe proof-shell-theorem-dependency-list-regexp)
-    (proof-shell-process-urgent-message-thmdeps))
-
    ((proof-looking-at-safe proof-shell-theorem-dependency-list-regexp)
     (proof-shell-process-urgent-message-thmdeps))
 
@@ -1752,58 +1783,59 @@ i.e., 'goals or 'response."
   (let ((start proof-shell-delayed-output-start)
 	(end   proof-shell-delayed-output-end)
 	(flags proof-shell-delayed-output-flags))
-  (goto-char start)
-  (cond
-   ((and proof-shell-start-goals-regexp
-	 (proof-re-search-forward proof-shell-start-goals-regexp end t))
-     (let* ((gmark  (match-beginning 0)) ; start of goals message
-	    (gstart (or (match-end 1)    ; start of actual display
-			gmark))
-	    (rstart start)		 ; possible response before goals
-	    (gend   end)
-	    both)			 ; flag for response+goals
+    (goto-char start)
+    (cond
+     ((and proof-shell-start-goals-regexp
+	   (proof-re-search-forward proof-shell-start-goals-regexp end t))
+      (let* ((gmark  (match-beginning 0)) ; start of goals message
+	     (gstart (or (match-end 1)    ; start of actual display
+			 gmark))
+	     (rstart start)		 ; possible response before goals
+	     (gend   end)
+	     both)			 ; flag for response+goals
 
-       (goto-char gstart)
-       (while (re-search-forward proof-shell-start-goals-regexp end t)
-	 (setq gmark (match-beginning 0))
-	 (setq gstart (or (match-end 1) gmark))
-	 (setq gend
-	       (if (and proof-shell-end-goals-regexp
-			(re-search-forward proof-shell-end-goals-regexp end t))
-		   (progn
-		     (setq rstart (match-end 0))
-		     (match-beginning 0))
-		 end)))
-       (setq proof-shell-last-goals-output
-	     (buffer-substring-no-properties gstart gend))
+        (goto-char gstart)
+        (while (re-search-forward proof-shell-start-goals-regexp end t)
+	  (setq gmark (match-beginning 0))
+	  (setq gstart (or (match-end 1) gmark))
+	  (setq gend
+	        (if (and proof-shell-end-goals-regexp
+			 (re-search-forward proof-shell-end-goals-regexp end t))
+		    (progn
+		      (setq rstart (match-end 0))
+		      (match-beginning 0))
+		  end)))
+        (setq proof-shell-last-goals-output
+	      (buffer-substring-no-properties gstart gend))
 
-       ;; FIXME heuristic: 4 allows for annotation in end-goals-regexp [is it needed?]
-       (setq both
-	     (> (- gmark rstart) 4))
-       (if both
-	   (proof-shell-display-output-as-response
-	    flags
-	    (buffer-substring-no-properties rstart gmark)))
-       ;; display goals output second so it persists in 2-pane mode
-       (unless (memq 'no-goals-display flags)
-	 (pg-goals-display proof-shell-last-goals-output both))
-       ;; indicate a goals output has been given
-       'goals))
+        ;; FIXME heuristic: 4 allows for annotation in
+        ;; end-goals-regexp [is it needed?]
+        (setq both
+	      (> (- gmark rstart) 4))
+        (if both
+	    (proof-shell-display-output-as-response
+	     flags
+	     (buffer-substring-no-properties rstart gmark)))
+        ;; display goals output second so it persists in 2-pane mode
+        (unless (memq 'no-goals-display flags)
+	  (pg-goals-display proof-shell-last-goals-output both))
+        ;; indicate a goals output has been given
+        'goals))
 
-   (t
-    (proof-shell-display-output-as-response flags proof-shell-last-output)
-    ;; indicate that (only) a response output has been given
-    'response))
+     (t
+      (proof-shell-display-output-as-response flags proof-shell-last-output)
+      ;; indicate that (only) a response output has been given
+      'response))
   
-  ;; FIXME (CPC 2015-12-31): The documentation of this hook suggests that it
-  ;; only gets run after new output has been displayed, but this isn't true at
-  ;; the moment: indeed, it gets run even for invisible commands.
-  ;;
-  ;; This causes issues in company-coq, where completion uses invisible
-  ;; commands to display the types of completion candidates; this causes the
-  ;; goals and response buffers to scroll. I fixed it by adding checks to
-  ;; coq-mode's hooks, but maybe we should do more.
-  (run-hooks 'proof-shell-handle-delayed-output-hook)))
+    ;; FIXME (CPC 2015-12-31): The documentation of this hook suggests that it
+    ;; only gets run after new output has been displayed, but this isn't true at
+    ;; the moment: indeed, it gets run even for invisible commands.
+    ;;
+    ;; This causes issues in company-coq, where completion uses invisible
+    ;; commands to display the types of completion candidates; this causes the
+    ;; goals and response buffers to scroll. I fixed it by adding checks to
+    ;; coq-mode's hooks, but maybe we should do more.
+    (run-hooks 'proof-shell-handle-delayed-output-hook)))
 
 
 

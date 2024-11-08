@@ -270,7 +270,7 @@ prototype is about 25 simple settings.
 For more advanced features you may need (or want) to write some Emacs
 Lisp.  If you're adding new functionality please consider making it
 generic for different proof assistants, if appropriate.  When writing
-your modes, please follow the Emacs Lisp conventions, @inforef{Tips, ,Elisp}.
+your modes, please follow the Emacs Lisp conventions, @pxref{Tips,,,Elisp}.
 
 The configuration variables are declared in the file
 @file{generic/proof-config.el}.  The details in the central part of this
@@ -647,6 +647,7 @@ the behaviour of script management.
 * Configuring undo behaviour::
 * Nested proofs::
 * Omitting proofs for speed::
+* Proof status statistic::
 * Safe (state-preserving) commands::
 * Activate scripting hook::
 * Automatic multiple files::
@@ -667,7 +668,7 @@ Note that for the generic functions to work properly, it is
 @strong{essential} that you set the syntax table for your mode properly,
 so that comments and strings are recognized.  See the Emacs
 documentation to discover how to do this (particularly for the function
-@code{modify-syntax-entry}, (@inforef{Syntax Tables, ,Elisp}).
+@code{modify-syntax-entry}, (@pxref{Syntax Tables,,,Elisp}).
 
 @xref{Proof script mode}, for more details of the parsing
 functions.
@@ -730,7 +731,7 @@ or @samp{@code{proof-script-parse-function}}.
 The next four settings configure the comment syntax.  Notice that to get
 reliable behaviour of the parsing functions, you may need to modify the
 syntax table for your prover's mode.  
-Read the Elisp manual (@inforef{Syntax Tables, ,Elisp}) for details about that.
+Read the Elisp manual (@pxref{Syntax Tables,,,Elisp}) for details about that.
 
 @c TEXI DOCSTRING MAGIC: proof-script-comment-start
 @defvar proof-script-comment-start 
@@ -1148,9 +1149,9 @@ consistency. Portions that can be potentially omitted are called
 @emph{opaque proofs} in Proof General, because usually only
 opaque proofs (in the sense of Coq) can be omitted without
 risking to break the following code. This feature is also
-described in the Proof General manual, @inforef{Script processing
-commands, ,ProofGeneral} and @inforef{Omitting proofs for speed,
-,ProofGeneral}.
+described in the Proof General manual, @pxref{Script processing
+commands,,,ProofGeneral} and
+@pxref{Omitting proofs for speed,,,ProofGeneral}.
 
 The omit proofs feature works in a simple, straightforward way:
 After parsing the asserted region, Proof General uses regular
@@ -1163,6 +1164,21 @@ it is immediate, that the omit proof feature does only work if
 proofs are not nested. If a nested proof is found, a warning is
 displayed and omitting proofs stops at that location for the
 currently asserted region.
+
+In Coq, commands with non-local effects, such as @code{Hint}, may
+appear inside proofs. Additionally, admitting a proof of a @code{Let}
+declaration causes a warning in Coq. To treat such cases, the
+predicate @code{proof-script-cmd-prevents-proof-omission} is applied
+to all commands inside proofs and the regular expression
+@code{proof-script-cmd-force-next-proof-kept} is matched against all
+commands outside proofs. In case of a hit, the current or,
+respectively, the next proof is treated as non-opaque and is not
+omitted. Note that a match of
+@code{proof-script-cmd-force-next-proof-kept} is only handled if the
+matching command and the following proof appear in the same asserted
+region. If the proof is asserted separately, the information about the
+match in the previously asserted region is lost and the proof may thus
+be omitted.
 
 To enable the omit proofs feature, the following settings must be
 configured.
@@ -1187,10 +1203,14 @@ match of @samp{@code{proof-script-proof-end-regexp}}, are omitted (not send
 to the proof assistant) and replaced by
 @samp{@code{proof-script-proof-admit-command}}. If a match for
 @samp{@code{proof-script-definition-end-regexp}} is found while searching
-forward for the proof end, the current proof (up to and including
-the match of @samp{@code{proof-script-definition-end-regexp}}) is considered
-to be not opaque and not omitted, thus all these proof commands
-_are_ sent to the proof assistant.
+forward for the proof end or if
+@samp{@code{proof-script-cmd-prevents-proof-omission}} recognizes a proof
+command that prevents proof omission then the current proof (up
+to and including the match of
+@samp{@code{proof-script-definition-end-regexp}} or
+@samp{@code{proof-script-proof-end-regexp}}) is considered to be not opaque
+and not omitted, thus all these proof commands _are_ sent to the
+proof assistant.
 
 The feature does not work for nested proofs. If a match for
 @samp{@code{proof-script-proof-start-regexp}} is found before the next match
@@ -1227,6 +1247,102 @@ See @samp{@code{proof-omit-proofs-configured}}.
 @defvar proof-script-proof-admit-command 
 Proof command to be inserted instead of omitted proofs.
 @end defvar
+
+@c TEXI DOCSTRING MAGIC: proof-script-cmd-prevents-proof-omission
+@defvar proof-script-cmd-prevents-proof-omission 
+Optional predicate to match commands that prevent omitting the current proof.@*
+If set, this option should contain a function that takes a proof
+command (as string) as argument and returns t or nil. If set, the
+function is called on every proof command inside a proof while
+scanning for proofs to omit. The predicate should return t if the
+command has effects ouside the proof, potentially breaking the
+script if the current proof is omitted. If the predicate returns
+t, the proof is considered to be not opaque and thus not omitted.
+@end defvar
+
+@c TEXI DOCSTRING MAGIC: proof-script-cmd-force-next-proof-kept
+@defvar proof-script-cmd-force-next-proof-kept 
+Optional regexp for commands that prevent omitting the next proof.@*
+If set, this option should contain a regular expression that
+matches proof-script commands that prevent the omission of proofs
+dirctly following this command. When scanning the newly asserted
+region for proofs to omit, every proof-script command outside
+proofs is matched against this regexp. If it matches and the next
+command matches @samp{@code{proof-script-proof-start-regexp}} this following
+proof will not be omitted.
+
+Note that recognition of commands with this regular expression
+does only work if the command and the following proof are
+asserted together.
+@end defvar
+
+
+@node Proof status statistic
+@section Proof status statistic
+
+The commands @code{proof-check-report} and @code{proof-check-annotate}
+build on the omit-proofs feature. Using its machinery,
+@code{proof-check-proofs}, the inner working horse of both commands,
+splits the current buffer into opaque proofs and all other material.
+The other material is asserted in the usual way and
+@code{proof-check-proofs} aborts if it detects an error in there. For
+opaque proofs it first tries to assert them in the usual way too. If
+this succeeds the proof is considered valid. Otherwise the proof is
+replaced with @code{proof-script-proof-admit-command} and the proof is
+considered invalid. In order to consider Admitted proofs as invalid
+ones, proofs whose last command matches
+@code{proof-omit-cheating-regexp} count as invalid. To associate
+theorem names with opaque proofs, the function
+@code{proof-get-proof-info-fn} is called, which is identical to
+@code{proof-tree-get-proof-info}, @xref{Proof Tree Elisp
+configuration}.
+
+To enable proof status statistics, the omit-proofs feature must be
+configured, @xref{Omitting proofs for speed}. Additionally, the
+following settings must be configured.
+
+@c TEXI DOCSTRING MAGIC: proof-get-proof-info-fn
+@defvar proof-get-proof-info-fn 
+Return proof name and state number for @samp{@code{proof-check-proofs}}.@*
+Proof assistant specific function for @samp{@code{proof-check-proofs}}. This
+function takes no arguments, it is called after completely
+processing the proof script up to a certain point (including all
+callbacks in spans). It must return a list, which contains, in
+the following order:
+
+* the current state number (as positive integer)
+* the name of the current proof (as string) or nil
+
+The proof assistant should return to the same state when the
+state number is supplied to @samp{@code{proof-retract-command-fn}}.
+Processing the command returned by @samp{@code{proof-retract-command-fn}}
+without processing any other command after calling this function
+should be a no-op.
+
+(This function has the same signature and specification as
+@samp{@code{proof-tree-get-proof-info}}.)
+@end defvar
+
+@c TEXI DOCSTRING MAGIC: proof-retract-command-fn
+@defvar proof-retract-command-fn 
+Function for retract command to a certain state.@*
+This function takes a state as argument as returned by
+@samp{@code{proof-get-proof-info-fn}}. It should return a command that brings
+the proof assistant back to the same state.
+@end defvar
+
+@c TEXI DOCSTRING MAGIC: proof-omit-cheating-regexp
+@defvar proof-omit-cheating-regexp 
+Regular expression matching proof closing commands for incomplete proofs.@*
+If set, this regular expression is applied to the last command of
+opaque proofs. If it matches the proofs counts as invalid for the
+proof-status statistics and annotation feature. For Coq this is
+used to mark Admitted proofs as invalid.
+
+This option can be left at @samp{nil}.
+@end defvar
+
+
 @node Safe (state-preserving) commands
 @section Safe (state-preserving) commands
 
@@ -2519,7 +2635,8 @@ advantage of not requiring the underlying text to be changed to display
 symbols.  
 
 Usage of the Unicode Tokens package is described in the Proof General
-user manual, @inforef{Unicode support, ,ProofGeneral}.
+user manual, @pxref{Unicode symbols and special layout
+support,,,ProofGeneral}.
 
 @c FIXME TODO: add documentation here to explain config of Unicode Tokens
 
@@ -2557,6 +2674,10 @@ tokens (for example, editing documentation or source code files).
 @node Configuring Proof-Tree Visualization
 @chapter Configuring Proof-Tree Visualization
 
+@b{Parts of this section are outdated. Please create an issue at
+github.com/ProofGeneral/Proof General if you have a question for
+adapting Prooftree for a new proof assistant.}
+
 The proof-tree visualization feature was written with the idea of
 supporting Coq as well as other proof assistants. Nevertheless,
 supporting proof-tree visualization for a second proof assistant
@@ -2591,17 +2712,8 @@ proof goal. The second layer contains proof trees for goals that
 have been added to the proof after the first proof tree was
 completed. And so on.
 
-To organize the layers, Prooftree must identify those proof
-commands that add new goals to a proof.
-
-@c TEXI DOCSTRING MAGIC: proof-tree-new-layer-command-regexp
-@defvar proof-tree-new-layer-command-regexp 
-Regexp to match proof commands that add new goals to a proof.@*
-This regexp must match the command that turns the proof assistant
-into prover mode, which adds the initial goal to the proof.  It
-must further match commands that add additional goals after all
-previous goals have been proved.
-@end defvar
+Prooftree assumes a new layer when it receives new goals in a state
+where the number of open goals is zero.
 
 
 @node Prerequisites
@@ -2705,62 +2817,13 @@ proof-tree display is distributed in a few chunks over
 The main task of the Elisp code is to extract goals, undo events
 and information about existential variables from the
 proof-assistant output and to send all this data to Prooftree.
-The Elisp code does also determine if additional output must be
-requested from the proof assistant. In that case it adds
-appropriate commands to @code{proof-action-list}, @pxref{Proof
-script mode}. These additional commands are flagged with
+Additional commands inserted by Prooftree are flagged with
 @code{proof-tree-show-subgoal}, @code{no-goals-display} and
 @code{no-response-display}. The flag
 @code{proof-tree-show-subgoal} ensures that a number of internal
 functions ignore these additional commands. The other two flags
 ensure that their output is neither displayed in the goals nor
 the response buffer.
-
-For the decision about which goals must be sent to Prooftree, the
-Elisp code maintains the following two state variables.
-
-@c TEXI DOCSTRING MAGIC: proof-tree-sequent-hash
-@defvar proof-tree-sequent-hash 
-Hash table to remember sequent ID's.@*
-Needed because some proof assistants do not distinguish between
-new subgoals, which have been created by the last proof command,
-and older, currently unfocussed subgoals.  If Proof General meets
-a goal, it is treated as new subgoal if it is not in this hash yet.
-
-The hash is mostly used as a set of sequent ID's.  However, for
-undo operations it is necessary to delete all those sequents from
-the hash that have been created in a state later than the undo
-state.  For this purpose this hash maps sequent ID's to the state
-number in which the sequent has been created.
-
-The hash table is initialized in @samp{@code{proof-tree-start-process}}.
-@end defvar
-
-
-@c TEXI DOCSTRING MAGIC: proof-tree-existentials-alist
-@defvar proof-tree-existentials-alist 
-Alist mapping existential variables to sequent ID's.@*
-Used to remember which goals need a refresh when an existential
-variable gets instantiated.  To support undo commands the old
-contents of this list must be stored in
-@samp{@code{proof-tree-existentials-alist-history}}.  To ensure undo is
-properly working, this variable should only be changed by using
-@samp{@code{proof-tree-delete-existential-assoc}},
-@samp{@code{proof-tree-add-existential-assoc}} or
-@samp{@code{proof-tree-clear-existentials}}.
-@end defvar
-
-When retracting these two variables must be set to their previous
-state. For @code{proof-tree-sequent-hash} this is done with the
-state numbers that are stored in the hash. For
-@code{proof-tree-existentials-alist} a separate alist stores
-previous states.
-
-@c TEXI DOCSTRING MAGIC: proof-tree-existentials-alist-history
-@defvar proof-tree-existentials-alist-history 
-Alist mapping state numbers to old values of @samp{@code{proof-tree-existentials-alist}}.@*
-Needed for undo.
-@end defvar
 
 
 In Prooftree the separation between generic and proof-assistant
@@ -2876,28 +2939,29 @@ Urgent actions are those that must be executed before
 @code{proof-action-list} to the proof assistant. For execution
 speed, the amount of urgent code should be kept small.
 
-@c TEXI DOCSTRING MAGIC: proof-tree-urgent-action
-@defun proof-tree-urgent-action flags
-Handle urgent points before the next item is sent to the proof assistant.@*
-Schedule goal updates when existential variables have changed and
-call @samp{@code{proof-tree-urgent-action-hook}}. All this is only done if
-the current output does not come from a command (with the
-@code{'proof-tree-show-subgoal} flag) that this package inserted itself.
+@c TEXI DOCSTRING MAGIC: proof-tree-check-proof-finish
+@defun proof-tree-check-proof-finish last-item
+Urgent action to delay processing at proof end.@*
+This function is called from @samp{@code{proof-shell-exec-loop}} after the
+old item has been removed and before the next item from
+@samp{@code{proof-action-list}} is sent to the proof assistant. Of course
+only when the proof-tree display is active. At the end of the
+proof, this function delays items just following the previous
+proof until all show-goal commands from prooftree and the
+@samp{@code{proof-tree-display-stop-command}} (which switches the dependent
+evar line off for Coq) have been processed.
 
-Urgent actions are only needed if the external proof display is
-currently running. Therefore this function should not be called
-when @samp{@code{proof-tree-external-display}} is nil.
-
-This function assumes that the prover output is not suppressed.
-Therefore, @samp{@code{proof-tree-external-display}} being t is actually a
-necessary precondition.
-
-The not yet delayed output is in the region
-[@code{proof-shell-delayed-output-start}, @code{proof-shell-delayed-output-end}].
+If this function detects the end of the proof, it moves
+non-priority items following in @samp{@code{proof-action-list}} to
+@samp{@code{proof-tree--delayed-actions}} and sets
+@samp{@code{proof-second-action-list-active}}. When later the command from
+@samp{@code{proof-tree-display-stop-command}} is recognized, the items are
+moved back. If no items follow the end of the previous proof,
+@samp{@code{proof-tree-display-stop-command}} is set to t.
 @end defun
 
 
-The function @code{proof-tree-urgent-action} is called at a point
+The function @code{proof-tree-check-proof-finish} is called at a point
 where it is save to manipulate @code{proof-action-list}. This is
 essential, because @code{proof-tree-urgent-action} inserts goal
 display commands into @code{proof-action-list} when existential

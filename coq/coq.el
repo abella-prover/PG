@@ -38,7 +38,6 @@
   (require 'outline)
   (require 'newcomment)
   (require 'etags))
-(defvar proof-info)       ; dynamic scope in proof-tree-urgent-action
 (defvar action)       ; dynamic scope in coq-insert-as stuff
 (defvar string)       ; dynamic scope in coq-insert-as stuff
 (defvar old-proof-marker)
@@ -122,8 +121,8 @@ Namely, goals that do not fit in the goals window."
      ;; Should this variable be buffer-local? No opinion on that but if yes we
      ;; should re-intialize to coq-search-blacklist-string instead of
      ;; keeping the current value (that may come from another file).
-     ,(format "Add Search Blacklist %s. " coq-search-blacklist-current-string))
-   '("Set Suggest Proof Using. ") coq-user-init-cmd)
+     ,(format "Add Search Blacklist %s." coq-search-blacklist-current-string))
+   '("Set Suggest Proof Using.") coq-user-init-cmd)
   "Command to initialize the Coq Proof Assistant.")
 
 ;; FIXME: Even if we don't use coq-indent for indentation, we still need it for
@@ -146,8 +145,20 @@ Namely, goals that do not fit in the goals window."
 ;;  "Add LoadPath \"%s\"." ;; fixes unadorned Require (if .vo exists).
   "*Command of the inferior process to change the directory.")
 
-(defvar coq-shell-proof-completed-regexp "No\\s-+more\\s-+\\(?:sub\\)?goals\\.\\|Subtree\\s-proved!\\|Proof\\s-completed"; \\|This subproof is complete
-  "*Regular expression indicating that the proof has been completed.")
+(defvar coq-shell-proof-completed-regexp
+  (concat "No\\s-+more\\s-+\\(?:sub\\)?goals\\.\\|Subtree\\s-proved!\\|"
+          "Proof\\s-completed\\|"
+          ;; if printing width is small, eg. when running in batch mode,
+          ;; there might be a line break after infomsg
+          "<infomsg>\n?.*\\s-is\\s-declared"
+          ;; \\|This subproof is complete
+          )
+  "*Regular expression indicating that the proof has been completed.
+Coq instance of `proof-shell-clear-goals-regexp'. Used in
+`proof-shell-process-urgent-message' to determine if the goals
+buffer shall be cleaned. Some of the messages recognized here are
+not printed by Coq in silent mode, such that Proof General might
+fail to delete the goals buffer.")
 
 (defvar coq-goal-regexp
   "\\(============================\\)\\|\\(\\(?:sub\\)?goal [0-9]+\\)\n")
@@ -189,14 +200,8 @@ It is mostly useful in three window mode, see also
   :group 'coq-config
   :package-version '(ProofGeneral . "4.2"))
 
-;; Ignore all commands that start a proof. Otherwise "Proof" will appear
-;; as superfluous node in the proof tree. Note that we cannot ignore Proof,
-;; because, Fixpoint does not display the proof goal, see Coq bug #2776.
 (defcustom coq-proof-tree-ignored-commands-regexp
-  (concat "^\\(\\(Show\\)\\|\\(Locate\\)\\|"
-          "\\(Theorem\\)\\|\\(Lemma\\)\\|\\(Remark\\)\\|\\(Fact\\)\\|"
-          "\\(Corollary\\)\\|\\(Proposition\\)\\|\\(Definition\\)\\|"
-          "\\(Let\\)\\|\\(Fixpoint\\)\\|\\(CoFixpoint\\)\\)")
+  "^\\(\\(Show\\)\\|\\(Locate\\)\\)"
   "Regexp for `proof-tree-ignored-commands-regexp'."
   :type 'regexp
   :group 'coq-proof-tree)
@@ -215,12 +220,6 @@ It is mostly useful in three window mode, see also
   :type 'regexp
   :group 'coq-proof-tree)
 
-(defcustom coq-proof-tree-new-layer-command-regexp
-  "^\\(\\(Proof\\)\\|\\(Grab Existential Variables\\)\\)"
-  "Regexp for `proof-tree-new-layer-command-regexp'."
-  :type 'regexp
-  :group 'coq-proof-tree)
-
 (defcustom coq-proof-tree-current-goal-regexp
   (concat "^[0-9]+ \\(?:focused \\)?\\(?:sub\\)?goal\\(?:s\\)?\\s-*"
           "\\(?:(\\(?:unfocused: [-0-9]+\\)?,?"
@@ -231,7 +230,7 @@ It is mostly useful in three window mode, see also
   :group 'coq-proof-tree)
 
 (defcustom coq-proof-tree-update-goal-regexp
-  (concat "^goal / evar \\([0-9]+\\) is:\n"
+  (concat "^goal ID \\([0-9]+\\) at state \\([0-9]+\\)\n"
           "\\s-*\n\\(\\(?:.+\n\\)*\\)\\(?:\n\\|$\\)")
   "Regexp for `proof-tree-update-goal-regexp'."
   :type 'regexp
@@ -243,15 +242,9 @@ It is mostly useful in three window mode, see also
   :type 'regexp
   :group 'coq-proof-tree)
 
-(defcustom coq-proof-tree-existential-regexp "\\(\\?[0-9]+\\)"
-  "Regexp for `proof-tree-existential-regexp'."
-  :type 'regexp
-  :group 'coq-proof-tree)
-
-(defcustom coq-proof-tree-instantiated-existential-regexp
-  (concat coq-proof-tree-existential-regexp " using")
-  "Regexp for recognizing an instantiated existential variable."
-  :type 'regexp
+(defcustom coq-proof-tree-manage-dependent-evar-line t
+  "Switch dependent evar line on and off for proof tree displayed proofs."
+  :type 'boolean
   :group 'coq-proof-tree)
 
 (defcustom coq-proof-tree-existentials-state-start-regexp
@@ -344,10 +337,6 @@ It is mostly useful in three window mode, see also
          (frame-gls (mapcar #'window-frame wins-gls)))
     (filtered-frame-list (lambda (x) (and (member x frame-resp) (member x frame-gls))))))
 
-
-(defun coq-remove-trailing-blanks (s)
-  (let ((pos (string-match "\\s-*\\'" s)))
-    (substring s 0 pos)))
 
 (defun coq-remove-starting-blanks (s)
   (string-match "\\`\\s-*" s)
@@ -461,7 +450,7 @@ This is a subroutine of `proof-shell-filter'."
          ;;         'proof-eager-annotation-face))
          (str (proof-shell-strip-eager-annotations start end))
          (strnotrailingspace
-          (coq-remove-starting-blanks (coq-remove-trailing-blanks str))))
+          (coq-remove-starting-blanks (proof-strip-whitespace-at-end str))))
     (pg-response-display-with-face strnotrailingspace))) ; face
 
 
@@ -715,7 +704,7 @@ If locked span already has a state number, then do nothing. Also updates
       (if (= proofdepth 0) (proof-clean-buffer proof-goals-buffer))
       (setq coq--retract-naborts naborts)
       (list
-       (format "BackTo %s . "
+       (format "BackTo %s ."
                (int-to-string span-staten))))))
 
 (defvar coq-current-goal 1
@@ -745,6 +734,21 @@ If locked span already has a state number, then do nothing. Also updates
   ;;   (message "Unknown command, hopes this won't desynchronize ProofGeneral")
   ;;   t))))
 
+(defun coq-cmd-prevents-proof-omission (cmd)
+  "Instanciation for `proof-script-cmd-prevents-proof-omission'.
+This predicate decides whether a command inside a proof might
+have effects outside the proof, which would prohibit omitting the
+proof, see `proof-script-omit-proofs'.
+
+Commands starting lower case are deemed as tactics that have
+proof local effect only and so are bullets and braces. Everything
+else is checked against the STATECH field in the coq syntax data
+base, see coq-db.el."
+  (if (or (proof-string-match coq-lowercase-command-regexp cmd)
+          (proof-string-match coq-bullet-regexp cmd)
+          (proof-string-match coq-braces-regexp cmd))
+      nil
+    (not (coq-state-preserving-p cmd))))
 
 (defun coq-hide-additional-subgoals-switch ()
   "Function invoked when the user switches option `coq-hide-additional-subgoals'."
@@ -893,7 +897,7 @@ is nil (t by default)."
                       (if shft (if id "About" "Locate")
                         (if ctrl (if id "Print" "Locate")))))))
         (proof-shell-invisible-command
-         (format (concat  cmd " %s . ")
+         (format (concat  cmd " %s .")
                  ;; Notation need to be surrounded by ""
                  (if id id (concat "\"" notat "\""))))))))
 
@@ -921,7 +925,7 @@ Otherwise propose identifier at point if any."
     (proof-shell-ready-prover)
     (setq cmd (coq-guess-or-ask-for-string ask dontguess))
     (proof-shell-invisible-command
-     (format (concat do " %s . ") (funcall postform cmd))
+     (format (concat do " %s .") (funcall postform cmd))
      wait)))
 
 
@@ -942,12 +946,12 @@ the time of writing this documentation)."
     ;; to trigger "Show" or anything that we usually insert after a group of
     ;; commands.
     (unless flag-is-on (proof-shell-invisible-command
-                        (format " %s . " (funcall postform setcmd))
+                        (format " %s ." (funcall postform setcmd))
                         nil nil 'no-response-display 'empty-action-list))
     (proof-shell-invisible-command
-     (format " %s . " (funcall postform cmd)) 'wait nil 'empty-action-list)
+     (format " %s ." (funcall postform cmd)) 'wait nil 'empty-action-list)
     (unless flag-is-on (proof-shell-invisible-command
-                        (format " %s . " (funcall postform unsetcmd))
+                        (format " %s ." (funcall postform unsetcmd))
                         'waitforit  nil 'no-response-display 'empty-action-list))))
 
 (defun coq-ask-do-set-unset (ask do setcmd unsetcmd
@@ -987,7 +991,7 @@ UNSETCMD.  See `coq-command-with-set-unset'."
   ;;   (setq cmd (coq-guess-or-ask-for-string ask dontguess))
   ;;   (coq-command-with-set-unset
   ;;    "Set Printing Implicit"
-  ;;    (format (concat do " %s . ") cmd)
+  ;;    (format (concat do " %s .") cmd)
   ;;    "Unset Printing Implicit" )
   ;;   ))
 
@@ -1082,7 +1086,7 @@ This is specific to `coq-mode'."
    ))
 
 (defun coq-set-undo-limit (undos)
-  (proof-shell-invisible-command (format "Set Undo %s . " undos)))
+  (proof-shell-invisible-command (format "Set Undo %s ." undos)))
 
 (defun coq-Pwd ()
   "Display the current Coq working directory."
@@ -1756,7 +1760,7 @@ See  `coq-fold-hyp'."
     (coq-fold-hyp h)))
 ;;;;;;;
 
-(proof-definvisible coq-PrintHint "Print Hint. ")
+(proof-definvisible coq-PrintHint "Print Hint.")
 
 ;; Items on show menu
 (proof-definvisible coq-show-tree "Show Tree.")
@@ -1767,6 +1771,10 @@ See  `coq-fold-hyp'."
 (proof-definvisible coq-unset-printing-implicit "Unset Printing Implicit.")
 (proof-definvisible coq-set-printing-all "Set Printing All.")
 (proof-definvisible coq-unset-printing-all "Unset Printing All.")
+(proof-definvisible coq-set-printing-parentheses "Set Printing Parentheses.")
+(proof-definvisible coq-unset-printing-parentheses "Unset Printing Parentheses.")
+(proof-definvisible coq-set-printing-notations "Set Printing Notations.")
+(proof-definvisible coq-unset-printing-notations "Unset Printing Notations.")
 (proof-definvisible coq-set-printing-synth "Set Printing Synth.")
 (proof-definvisible coq-unset-printing-synth "Unset Printing Synth.")
 (proof-definvisible coq-set-printing-coercions "Set Printing Coercions.")
@@ -1780,8 +1788,8 @@ See  `coq-fold-hyp'."
 (proof-definvisible coq-set-printing-wildcards "Set Printing Wildcard.")
 (proof-definvisible coq-unset-printing-wildcards "Unset Printing Wildcard.")
 ; Takes an argument
-;(proof-definvisible coq-set-printing-printing-depth "Set Printing Printing Depth . ")
-;(proof-definvisible coq-unset-printing-printing-depth "Unset Printing Printing Depth . ")
+;(proof-definvisible coq-set-printing-printing-depth "Set Printing Printing Depth .")
+;(proof-definvisible coq-unset-printing-printing-depth "Unset Printing Printing Depth .")
 
 ;; Persistent setting, non-boolean, non cross-version compatible (Coq >= 8.10)
 (defconst coq-diffs--function #'coq-diffs
@@ -1899,11 +1907,11 @@ at `proof-assistant-settings-cmds' evaluation time.")
   (setq proof-query-file-save-when-activating-scripting nil)
 
   ;; Commands sent to proof engine
-  (setq proof-showproof-command "Show. "
-        proof-context-command "Print All. "
-        proof-goal-command "Goal %s. "
-        proof-save-command "Save %s. "
-        proof-find-theorems-command "Search %s. ")
+  (setq proof-showproof-command "Show."
+        proof-context-command "Print All."
+        proof-goal-command "Goal %s."
+        proof-save-command "Save %s."
+        proof-find-theorems-command "Search %s.")
 
   (setq proof-show-proof-diffs-regexp coq-show-proof-diffs-regexp)
 
@@ -1938,12 +1946,12 @@ at `proof-assistant-settings-cmds' evaluation time.")
   ;; span menu
   (setq proof-script-span-context-menu-extensions #'coq-create-span-menu)
 
-  (setq proof-shell-start-silent-cmd "Set Silent. "
-        proof-shell-stop-silent-cmd "Unset Silent. ")
+  (setq proof-shell-start-silent-cmd "Set Silent."
+        proof-shell-stop-silent-cmd "Unset Silent.")
 
   ;; prooftree config
   (setq
-   proof-tree-configured t
+   proof-tree-configured (coq--post-v810)
    proof-tree-get-proof-info 'coq-proof-tree-get-proof-info
    proof-tree-find-begin-of-unfinished-proof
      'coq-find-begin-of-unfinished-proof)
@@ -1954,7 +1962,16 @@ at `proof-assistant-settings-cmds' evaluation time.")
    proof-script-proof-start-regexp coq-proof-start-regexp
    proof-script-proof-end-regexp coq-proof-end-regexp
    proof-script-definition-end-regexp coq-definition-end-regexp
-   proof-script-proof-admit-command coq-omit-proof-admit-command)
+   proof-script-proof-admit-command coq-omit-proof-admit-command
+   proof-script-cmd-prevents-proof-omission #'coq-cmd-prevents-proof-omission
+   proof-script-cmd-force-next-proof-kept coq-cmd-force-next-proof-kept
+   proof-omit-cheating-regexp coq-omit-cheating-regexp)
+
+  ;; proof-check-report/proof-check-annotate config
+  (setq
+   proof-get-proof-info-fn #'coq-get-proof-info-fn
+   proof-retract-command-fn #'coq-retract-command)
+
 
   (setq proof-cannot-reopen-processed-files nil)
 
@@ -1968,9 +1985,14 @@ at `proof-assistant-settings-cmds' evaluation time.")
    proof-shell-clear-goals-regexp coq-shell-proof-completed-regexp
    proof-shell-proof-completed-regexp coq-shell-proof-completed-regexp
    proof-shell-error-regexp coq-error-regexp
+   proof-shell-no-error-regexp coq-no-error-regexp
    proof-shell-interrupt-regexp coq-interrupt-regexp
    proof-shell-assumption-regexp coq-id
    proof-shell-theorem-dependency-list-regexp coq-shell-theorem-dependency-list-regexp
+   ;; CRs now can and should be preserved (to support String-related theories),
+   ;; see also this GitHub issue: https://github.com/ProofGeneral/PG/issues/773
+   proof-shell-strip-crs-from-input nil
+
    pg-subterm-first-special-char ?\360
    ;; The next three represent path annotation information
    pg-subterm-start-char ?\372          ; not done
@@ -2021,10 +2043,8 @@ at `proof-assistant-settings-cmds' evaluation time.")
    proof-tree-ignored-commands-regexp coq-proof-tree-ignored-commands-regexp
    proof-tree-navigation-command-regexp coq-navigation-command-regexp
    proof-tree-cheating-regexp coq-proof-tree-cheating-regexp
-   proof-tree-new-layer-command-regexp coq-proof-tree-new-layer-command-regexp
    proof-tree-current-goal-regexp coq-proof-tree-current-goal-regexp
    proof-tree-update-goal-regexp coq-proof-tree-update-goal-regexp
-   proof-tree-existential-regexp coq-proof-tree-existential-regexp
    proof-tree-existentials-state-start-regexp
                       coq-proof-tree-existentials-state-start-regexp
    proof-tree-existentials-state-end-regexp
@@ -2032,10 +2052,9 @@ at `proof-assistant-settings-cmds' evaluation time.")
    proof-tree-additional-subgoal-ID-regexp
                               coq-proof-tree-additional-subgoal-ID-regexp
    proof-tree-branch-finished-regexp coq-proof-tree-branch-finished-regexp
-   proof-tree-extract-instantiated-existentials
-     'coq-extract-instantiated-existentials
    proof-tree-show-sequent-command 'coq-show-sequent-command
    proof-tree-find-undo-position 'coq-proof-tree-find-undo-position
+   proof-tree-display-stop-command 'coq-proof-tree-disable-evars
    )
 
   (proof-shell-config-done))
@@ -2055,7 +2074,7 @@ at `proof-assistant-settings-cmds' evaluation time.")
 
 
 (defun coq-goals-mode-config ()
-  (setq pg-goals-change-goal "Show %s . ")
+  (setq pg-goals-change-goal "Show %s .")
   (setq pg-goals-error-regexp coq-error-regexp)
   (setq proof-goals-font-lock-keywords coq-goals-font-lock-keywords)
   (proof-goals-config-done))
@@ -2078,7 +2097,7 @@ at `proof-assistant-settings-cmds' evaluation time.")
 ;; (defpacustom print-only-first-subgoal  nil
 ;;  "Whether to just print the first subgoal in Coq."
 ;;  :type 'boolean
-;;  :setting ("Focus. " . "Unfocus. "))
+;;  :setting ("Focus." . "Unfocus."))
 
 
 (defpacustom hide-additional-subgoals nil
@@ -2099,20 +2118,20 @@ at `proof-assistant-settings-cmds' evaluation time.")
 ;(defpacustom print-fully-explicit nil
 ;  "Print fully explicit terms."
 ;  :type 'boolean
-;  :setting ("Set Printing All. " . "Unset Printing All. "))
+;  :setting ("Set Printing All." . "Unset Printing All."))
 ;
 
 (defpacustom printing-depth 50
   "Depth of pretty printer formatting, beyond which dots are displayed."
   :type 'integer
-  :setting "Set Printing Depth %i . ")
+  :setting "Set Printing Depth %i .")
 
 (defun coq-diffs ()
   "Return string for setting Coq Diffs.
 Return the empty string if the version of Coq < 8.10."
   (setq pg-insert-text-function #'coq-insert-tagged-text)
   (if (coq--post-v810)
-      (format "Set Diffs \"%s\". " (symbol-name coq-diffs))
+      (format "Set Diffs \"%s\"." (symbol-name coq-diffs))
     ""))
 
 (defun coq-diffs--setter (symbol new-value)
@@ -2140,7 +2159,7 @@ Set Diffs setting if Coq is running and has a version >= 8.10."
 ;;(defpacustom undo-depth coq-default-undo-limit
 ;;  "Depth of undo history.  Undo behaviour will break beyond this size."
 ;;  :type 'integer
-;;  :setting "Set Undo %i . ")
+;;  :setting "Set Undo %i .")
 
 ;; Problem if the Remove or Add fails we leave Coq's blacklist in a strange
 ;; state: unnoticed by the user, and desynched from
@@ -2193,78 +2212,9 @@ Set Diffs setting if Coq is running and has a version >= 8.10."
          ;; * the name of the current proof or nil
     (list (car info) (nth 3 info))))
 
-(defun coq-extract-instantiated-existentials (start end)
-  "Coq specific function for `proof-tree-extract-instantiated-existentials'.
-Return the list of currently instantiated existential variables."
-  (proof-tree-extract-list
-   start end
-   coq-proof-tree-existentials-state-start-regexp
-   coq-proof-tree-existentials-state-end-regexp
-   coq-proof-tree-instantiated-existential-regexp))
-
-(defun coq-show-sequent-command (sequent-id)
+(defun coq-show-sequent-command (sequent-id state)
   "Coq specific function for `proof-tree-show-sequent-command'."
-  (format "Show Goal \"%s\"." sequent-id))
-
-(defun coq-proof-tree-get-new-subgoals ()
-  "Check for new subgoals and issue appropriate Show commands.
-This is a hook function for `proof-tree-urgent-action-hook'.  This
-function examines the current goal output and searches for new
-unknown subgoals.  Those subgoals have been generated by the last
-proof command and we must send their complete sequent text
-eventually to prooftree.  Because subgoals may change with
-the next proof command, we must execute the additionally needed
-Show commands before the next real proof command.
-
-The ID's of the open goals are checked with
-`proof-tree-sequent-hash' in order to find out if they are new.
-For any new goal an appropriate Show Goal command with a
-'proof-tree-show-subgoal flag is inserted into
-`proof-action-list'.  Then, in the normal delayed output
-processing, the sequent text is send to prooftree as a sequent
-update (see `proof-tree-update-sequent') and the ID of the
-sequent is registered as known in `proof-tree-sequent-hash'.
-
-Searching for new subgoals must only be done when the proof is
-not finished, because Coq 8.5 lists open existential variables
-as (new) open subgoals.  For this test we assume that
-`proof-marker' has not yet been moved.
-
-The `proof-tree-urgent-action-hook' is also called for undo
-commands.  For those, nothing is done.
-
-The not yet delayed output is in the region
-\[proof-shell-delayed-output-start, proof-shell-delayed-output-end]."
-  ;; (message "CPTGNS start %s end %s"
-  ;;          proof-shell-delayed-output-start
-  ;;          proof-shell-delayed-output-end)
-  (let ((start proof-shell-delayed-output-start)
-        (end proof-shell-delayed-output-end)
-        (state  (car proof-info)))
-  (when (> state proof-tree-last-state)
-    (with-current-buffer proof-shell-buffer
-      ;; The message "All the remaining goals are on the shelf" is processed as
-      ;; urgent message and is therefore before
-      ;; proof-shell-delayed-output-start. We therefore need to go back to
-      ;; proof-marker.
-      (goto-char proof-marker)
-      (unless (proof-re-search-forward
-               coq-proof-tree-branch-finished-regexp end t)
-        (goto-char start)
-        (while (proof-re-search-forward
-                coq-proof-tree-additional-subgoal-ID-regexp end t)
-          (let ((subgoal-id (match-string-no-properties 1)))
-            (unless (gethash subgoal-id proof-tree-sequent-hash)
-              ;; (message "CPTGNS new sequent %s found" subgoal-id)
-              (push (proof-shell-action-list-item
-                     (coq-show-sequent-command subgoal-id)
-                     (proof-tree-make-show-goal-callback (car proof-info))
-                     '(no-goals-display
-                       no-response-display
-                       proof-tree-show-subgoal))
-                    proof-action-list)))))))))
-
-(add-hook 'proof-tree-urgent-action-hook #'coq-proof-tree-get-new-subgoals)
+  (format "Show Goal %s at %d." sequent-id state))
 
 
 (defun coq-find-begin-of-unfinished-proof ()
@@ -2299,102 +2249,64 @@ This is the Coq incarnation of `proof-tree-find-undo-position'."
     (span-start span-res)))
 
 
-;; In Coq 8.6 the evar line is disabled by default because on some proofs it
-;; causes a severe performance hit. The disabled evar line causes prooftree to
-;; crash with a parsing error. Proof General must therefore turn on the evar
-;; output with the command "Set Printing Dependent Evars Line". Of course,
-;; after the proof, the evar line must be set back to what it was before the
-;; proof. I therefore look in the urgent action hook if proof display is
-;; switched on or off. When switched on, I test the current evar printing
-;; status with the undocumented command "Test Printing Dependent Evars Line" to
-;; remember if I have to switch evar printing off eventually.
+;; Since Coq 8.6 the evar line is disabled by default because on some
+;; proofs it causes a severe performance hit. For its features on evar
+;; creation and instantiation Prooftree needs the evar line and displays a
+;; warning for parsing errors caused by the missing evar line. Proof
+;; General therefore turns the evar line on when the proof tree display is
+;; enabled and off when the proof is finished or the display is disabled.
+;; This unconditional evar line switching is controled by
+;; `coq-proof-tree-manage-dependent-evar-line'. However, the flag in Coq
+;; that controls the printing of the dependent evar line will be restored
+;; to its old state by undo. Therefore, a combination of proof tree display
+;; and undo can cause the evar line to stay on until the next proof tree
+;; display is finished. One such way is to disable the proof tree display
+;; in the middle of a proof and then to undo a few tactics.
 
-(defvar coq--proof-tree-must-disable-evars nil
-  "Remember if evar printing must be disabled when leaving the current proof.")
-
-(defun coq-proof-tree-enable-evar-callback (_span)
-  "Callback for the evar printing status test.
-This is the callback for the command ``Test Printing Dependent Evars Line''.
-It checks whether evar printing was off and remembers that
-fact in `coq--proof-tree-must-disable-evars'."
-  (with-current-buffer proof-shell-buffer
-    (save-excursion
-      ;; When the callback runs, the next item is sent to Coq already and
-      ;; therefore proof-marker points to the end of the next command
-      ;; already. proof-shell-filter-manage-output sets old-proof-marker
-      ;; before calling proof-shell-exec-loop, this therefore points to the
-      ;; end of the command of this callback.
-      (goto-char old-proof-marker)
-      (when (re-search-forward "The Printing Dependent Evars Line mode is "
-                               nil t)
-        (if (looking-at "off")
-            (progn
-              ;; (message "CPTEEC evar line mode was off")
-              (setq coq--proof-tree-must-disable-evars t))
-          ;; (message "CPTEEC evar line mode was on")
-          (setq coq--proof-tree-must-disable-evars nil))))))
-
-(defun coq-proof-tree-insert-evar-command (cmd &optional callback)
-  "Insert an evar printing command at the head of `proof-action-list'."
-  (push (proof-shell-action-list-item
-         (concat cmd " Printing Dependent Evars Line.")
-         (if callback callback 'proof-done-invisible)
-         (list 'invisible))
-        proof-action-list))
+(defun coq-proof-tree-evar-command (cmd)
+  "Return the evar printing command for CMD as action list item."
+  (proof-shell-action-list-item
+   (concat cmd " Printing Dependent Evars Line.")
+   'proof-done-invisible
+   (list 'invisible 'no-response-display)))
 
 (defun coq-proof-tree-enable-evars ()
-  "Enable the evar status line for Coq >= 8.6.
-Test the status of evar printing to be able to set it back
-properly after the proof and enable the evar printing."
-  (when (coq--post-v86)
-    ;; We push to proof-action-list --- therefore we need to push in reverse
-    ;; order!
-    (coq-proof-tree-insert-evar-command "Set")
-    (coq-proof-tree-insert-evar-command
-     "Test"
-     'coq-proof-tree-enable-evar-callback)))
+  "Enable the evar status line."
+  ;; The evar status can be switched on and off since 8.6. However, prooftree
+  ;; is only supported for 8.10 or later.
+  (when (and (coq--post-v86) coq-proof-tree-manage-dependent-evar-line)
+    (proof-shell-ready-prover)
+    (proof-add-to-priority-queue (coq-proof-tree-evar-command "Set"))))
+
+(add-hook 'proof-tree-start-display-hook #'coq-proof-tree-enable-evars)
 
 (defun coq-proof-tree-disable-evars ()
-  "Disable evar printing if necessary.
-This function switches off evar printing after the proof, if it
-was off before the proof.  For undo commands, we rely on the fact
-that Coq itself undoes the effect of the evar printing change that
-we inserted after the goal statement.  We also rely on the fact
-that Proof General never backtracks into the middle of a
-proof.  (If this would happen, Coq would switch evar printing on
-and the code here would not switch it off after the proof.)
+  "Return action list item to disable evar printing.
+Function for `proof-tree-display-stop-command'."
+  ;; The evar status can be switched on and off since 8.6. However, prooftree
+  ;; is only supported for 8.10 or later.
+  (when (and (coq--post-v86) coq-proof-tree-manage-dependent-evar-line)
+    (coq-proof-tree-evar-command "Unset")))
 
-Being called from `proof-tree-urgent-action-hook', this function
-can rely on `proof-info' being dynamically bound to the last
-result of `coq-proof-tree-get-proof-info'."
-  (when coq--proof-tree-must-disable-evars
-    (when (> (car proof-info) proof-tree-last-state)
-      (coq-proof-tree-insert-evar-command "Unset"))
-    (setq coq--proof-tree-must-disable-evars nil)))
 
-(defun coq-proof-tree-evar-display-toggle ()
-  "Urgent action hook function for changing the evar printing status in Coq.
-This function is for `proof-tree-urgent-action-hook' (which is
-called only if external proof display is switched on).  It checks
-whether a proof was started or stopped and inserts commands for
-enableing and disabling the evar status line for Coq 8.6 or
-later.  Without the evar status line being enabled, prooftree
-crashes.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; proof-check-report/proof-check-annotate support
+;;
 
-Must only be called via `proof-tree-urgent-action-hook' to ensure
-that the dynamic variable `proof-info' is bound to the current
-result of `coq-proof-tree-get-proof-info'."
-  (let ((current-proof-name (cadr proof-info)))
-    (cond
-     ((and (null proof-tree-current-proof) current-proof-name)
-      ;; started a new proof
-      (coq-proof-tree-enable-evars))
-     ((and proof-tree-current-proof (null current-proof-name))
-      ;; finished the current proof
-      (coq-proof-tree-disable-evars)))))
+(defun coq-get-proof-info-fn ()
+  "Coq instance of `proof-get-proof-info-fn' for `proof-check-proofs'.
+Return state number followed by the name of the current proof of
+nil in a list."
+  (list
+   coq-last-but-one-statenum
+   (car coq-last-but-one-proofstack)))
 
-(add-hook 'proof-tree-urgent-action-hook #'coq-proof-tree-evar-display-toggle)
-
+(defun coq-retract-command (state)
+  "Coq instance of `proof-retract-command-fn' for `proof-check-proofs'.
+Return command that undos to state."
+  (format "BackTo %d." state))
+   
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -2415,7 +2327,10 @@ result of `coq-proof-tree-get-proof-info'."
       ;; Don't add the prefix if this is a command sent internally
       (unless (or (eq action 'proof-done-invisible)
                   (coq-bullet-p string)) ;; coq does not accept "Time -".
-        (setq string (concat coq--time-prefix string))))))
+        (setq string (concat coq--time-prefix string))
+        ;; coqtop *really wants* a newline after a comand-ending dot.
+        ;; (error) locations are very wrong otherwise
+        (setq string (proof-strip-whitespace-at-end string))))))
 
 (add-hook 'proof-shell-insert-hook #'coq-preprocessing)
 
@@ -2950,6 +2865,10 @@ Completion is on a quasi-exhaustive list of Coq tacticals."
 (define-key coq-keymap [(control ?l)]  #'coq-LocateConstant)
 (define-key coq-keymap [(control ?n)]  #'coq-LocateNotation)
 (define-key coq-keymap [(control ?w)]  #'coq-ask-adapt-printing-width-and-show)
+(define-key coq-keymap [(control ?9)]  #'coq-set-printing-parentheses)
+(define-key coq-keymap [(control ?0)]  #'coq-unset-printing-parentheses)
+(define-key coq-keymap [(?N)]          #'coq-set-printing-notations)
+(define-key coq-keymap [(?n)]          #'coq-unset-printing-notations)
 
 ;(proof-eval-when-ready-for-assistant
 ; (define-key ??? [(control c) (control a)] (proof-ass keymap)))
@@ -3045,7 +2964,7 @@ Completion is on a quasi-exhaustive list of Coq tacticals."
   "Last error from `coq-get-last-error-location' and `coq-highlight-error'.")
 
 (defvar coq--error-location-regexp
-  "^Toplevel input[^:]+:\n> \\(.*\\)\n> \\([^^]*\\)\\(\\^+\\)\n"
+  "^Toplevel input, characters \\(?1:[0-9]+\\)-\\(?2:[0-9]+\\):\\(\n> [^\n]*\\)*\n"
   "A regexp to search the header of coq error locations.")
 
 ;; I don't use proof-shell-last-output here since it is not always set to the
@@ -3054,12 +2973,16 @@ Completion is on a quasi-exhaustive list of Coq tacticals."
 ;; buffer (better to only scroll it?)
 (defun coq-get-last-error-location (&optional parseresp clean)
   "Return location information on last error sent by coq.
+
 Return a two elements list (POS LEN) if successful, nil otherwise.
-POS is the number of characters preceding the underlined expression,
-and LEN is its length.
-Coq error message must be like this:
+
+POS is the number of **bytes** preceding the error location in
+the current command, and LEN is its length (in bytes too).
+
+Coq error message is like this:
 
 \"
+Toplevel input, characters 22-26:
 > command with an error here ...
 >                       ^^^^
 \"
@@ -3071,45 +2994,33 @@ If PARSERESP is nil, don't really parse response buffer but take the value of
 If PARSERESP and CLEAN are non-nil, delete the error location from the response
 buffer."
   (if (not parseresp) last-coq-error-location
-    ;; proof-shell-handle-error-or-interrupt-hook is called from shell buffer
-    ;; then highlight the corresponding error location
     (proof-with-current-buffer-if-exists proof-response-buffer
-      (goto-char (point-max)) ;\nToplevel input, character[^:]:\n
-      (when (re-search-backward coq--error-location-regexp nil t)
-        (let ((text (match-string 1))
-              (pos (length (match-string 2)))
-              (len (length (match-string 3))))
+      (goto-char (point-max))
+      (if (not (re-search-backward coq--error-location-regexp nil t))
+          (setq last-coq-error-location (list 0 0))
+        (let ((pos (string-to-number (match-string 1)))
+              (end (string-to-number (match-string 2))))
+          (setq last-coq-error-location (list pos (- end pos)))
           ;; clean the response buffer from ultra-ugly underlined command line
-          ;; parsed above. Don't kill the first \n
+          ;; Don't kill the first \n
+          ;; TODO: make coq stop displaying it it?
           (let ((inhibit-read-only t))
-            (when clean (delete-region (match-beginning 0) (match-end 0))))
-          (when proof-shell-unicode ;; TODO: remove this (when...) when coq-8.3 is out.
-            ;; `pos' and `len' are actually specified in bytes, apparently. So
-            ;; let's convert them, assuming the encoding used is utf-8.
-            ;; Presumably in Emacs-23 we could use `string-bytes' for that
-            ;; since the internal encoding happens to use utf-8 as well.
-            ;; Actually in coq-8.3 one utf8 char = one space so we do not need
-            ;; this at all
-            (let ((bytes text)) ;(encode-coding-string text 'utf-8-unix)
-              ;; Check that pos&len make sense in `bytes', if not give up.
-              (when (>= (length bytes) (+ pos len))
-                ;; We assume here that `text' is a single line and use \n as
-                ;; a marker so we can find it back after decoding.
-                (setq bytes (concat (substring bytes 0 pos)
-                                    "\n" (substring bytes pos (+ pos len))))
-                (let ((chars (decode-coding-string bytes 'utf-8-unix)))
-                  (setq pos (string-match "\n" chars))
-                  (setq len (- (length chars) pos 1))))))
-          (setq last-coq-error-location (list pos len)))))))
+            (when clean (delete-region (match-beginning 0) (match-end 0)))))
+        last-coq-error-location))))
 
+(defun point-add-bytes (nbytes)
+  "Return current point shifted by NBYTES bytes."
+  (byte-to-position (+ (position-bytes (point)) nbytes)))
 
 (defun coq-highlight-error (&optional parseresp clean)
-  "Parse the last Coq output looking at an error message.
+  "Return position and length of error in last message.
+
 Highlight the text pointed by it.
 Coq error message must be like this:
 
 \"
-> command with an error here ...
+Toplevel input, characters 60-66:
+> ...
 >                       ^^^^
 \"
 
@@ -3118,7 +3029,10 @@ If PARSERESP is nil, don't really parse response buffer but take the value of
 `last-coq-error-location'.
 
 If PARSERESP and CLEAN are non-nil, delete the error location from the response
-buffer."
+buffer.
+
+Important: Coq gives char positions in bytes instead of chars.
+"
   (proof-with-current-buffer-if-exists proof-script-buffer
     (let ((mtch (coq-get-last-error-location parseresp clean)))
       (when mtch
@@ -3126,12 +3040,24 @@ buffer."
               (lgth (cadr mtch)))
           (goto-char (+ (proof-unprocessed-begin) 1))
           (coq-find-real-start)
-
-          ;; utf8 adaptation is made in coq-get-last-error-location above
-          (let ((time-offset (if coq-time-commands (length coq--time-prefix) 0)))
-            (goto-char (+ (point) pos))
-            (span-make-self-removing-span (point) (+ (point) (- lgth time-offset))
-                                          'face 'proof-warning-face)))))))
+          ;; locations are given in bytes. translate into valid positions
+          ;; + deal with coq bug #19355
+          (let* ((cmdstart (point))
+                 (next-cmd (progn (coq-script-parse-cmdend-forward) (point)))
+                 ;; test suspîcious location info from coq (coq#19355). coq <=
+                 ;; 8.20 on curly braces gives the global location instead of
+                 ;; the location inside the command. fallback: we locate the
+                 ;; error at the command start, with given length. we detect
+                 ;; the problem by testing if the location of the error is
+                 ;; greater than the end of the command itself.
+                 (bug19355 (> pos next-cmd)))
+            (goto-char cmdstart)
+              (let* ((pos (if bug19355 0 pos)) ;; 0 means start of command
+                     (beg (goto-char (point-add-bytes pos)))
+                     (end (goto-char (point-add-bytes lgth))))
+                (span-make-self-removing-span beg end 'face 'proof-warning-face)
+                ;; user usually expect the point to move to the error location
+                (goto-char beg))))))))
 
 (defun coq-highlight-error-hook ()
   (coq-highlight-error t t))

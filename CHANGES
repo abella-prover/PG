@@ -5,7 +5,52 @@ the Git ChangeLog, the GitHub repo https://github.com/ProofGeneral/PG
 
 * Changes of Proof General 4.6 from Proof General 4.5
 
-N/A
+** Generic changes
+*** Improve the omit-proofs feature to handle a number of cases where
+    proofs must not be omitted.
+*** Renew support for proof-tree visualization via the external command
+    prooftree, see http://askra.de/software/prooftree and Section 7
+    "Graphical Proof-Tree Visualization" in the Proof General manual.
+    Proof-tree visualization is currently only supported for Coq. The
+    prooftree support has been substantially rewritten, making use of
+    the much better support since Coq version 8.11.
+*** New command `proof-check-report' to generates the proof status
+    of all opaque proofs. Currently only available for Coq, see Coq
+    changes below for more details.
+*** New command `proof-check-annotate' to annotate all failing proofs
+    with FAIL comments.
+
+** Coq changes
+*** support Coq 8.19
+**** New option coq-compile-coqdep-warnings to configure the warning
+     command line argument (-w) of coqdep. The default of this option
+     is +module-not-found to let Proof General reliably detect missing
+     modules as coqdep error.
+*** Renew support for proof-tree visualization, see description in
+    generic changes above.
+*** New command `proof-check-report to generates the proof status
+    of all opaque proofs. This command is useful for a development
+    process where invalid proofs are permitted and vos compilation and
+    the omit proofs feature are used to work at the most interesting
+    or challenging point instead of on the first invalid proof. The
+    command generates a list of all opaque proofs in the current
+    buffer together with the information whether the proof script is
+    currently valid or invalid. The command can also be run in batch
+    mode, for instance in a continuous integration environment.
+*** New command `proof-check-annotate' to annotate all failing proofs
+    with FAIL comments. Useful in the development process as described
+    above to ensure all currently failing proofs are marked as such.
+*** flag Printing Parentheses and Printing Notations can be set/unset
+    via menu and Coq keymap (C-c C-a C-9 and C-c C-a C-0 for
+    Parentheses (optimized for British and American keyboards); C-c
+    C-a n and C-c C-a N for Notations).
+*** New options coq-compile-extra-coqc-arguments and
+    coq-compile-extra-coqdep-arguments to configure additional
+    command line arguments to calls of, respetively, coqc and coqdep
+    during auto compilation.
+*** Fix issues #687 and #688 where the omit-proofs feature causes
+    errors on correct code.
+
 
 * Changes of Proof General 4.5 from Proof General 4.4
 
@@ -44,7 +89,7 @@ standard support.
 *** add another (fallback) key-binding for proof-goto-point
     - The default key-binding for proof-goto-point (C-c <C-return>)
       was not available in TTYs. Now, this function can also be run
-      with "C-c RET", which happens to be automatically trigerred if
+      with "C-c RET", which happens to be automatically triggered if
       we type "C-c <C-return>" in a TTY.
 
 *** new proof-priority-action-list
@@ -376,7 +421,7 @@ standard support.
     | S n => ...
     end
     do this: (setq coq-match-indent 4) to get back the
-    previous indetation style:
+    previous indentation style:
     match n with
         O => ...
       | S n => ...

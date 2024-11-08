@@ -1,0 +1,10 @@
+Proof check results for proof_stat.v
+
+4 opaque proofs recognized: 1 successful 3 FAILING
+
+  FAIL a1_equal_4
+  OK   b_equal_6
+  FAIL b2_equal_6
+  FAIL use_admit
+
+

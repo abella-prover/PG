@@ -1,3 +1,10 @@
+# See ../../ci/doc/README.{md,pdf} for documentation about continuous
+# integration and testing of Proof General.
+#
+# The versions to be tested in between the CIPG markers are now and
+# then automatically updated. Please consider this when changing this
+# file.
+#
 name: CI
 
 on:
@@ -20,15 +27,19 @@ jobs:
     strategy:
       matrix:
         emacs_version:
+          # The content between the CIPG markers is automatically
+          # changed by the cipg program. Do not change these markers.
+          # CIPG change marker: build-emacs-versions
           - 26.3
           - 27.1
           - 27.2
           - 28.1
           - 28.2
           - 29.1
-      # at most 20 concurrent jobs per free account
-      # cf. https://help.github.com/en/actions/reference/workflow-syntax-for-github-actions#usage-limit
-      max-parallel: 4
+          - 29.2
+          - 29.3
+          - 29.4
+          # CIPG change marker end
       # don't cancel all in-progress jobs if one matrix job fails:
       fail-fast: false
 
@@ -65,8 +76,13 @@ jobs:
           # I don't think we need to check with all emacs
           # versions. The latest two should be enough, maybe even
           # only the latest one.
+          #
+          # The content between the CIPG markers is automatically
+          # changed by the cipg program. Do not change these markers.
+          # CIPG change marker: magic-emacs-version
           - 28.2
-          - 29.1
+          - 29.4
+          # CIPG change marker end
       # don't cancel all in-progress jobs if one matrix job fails:
       fail-fast: false
 
@@ -89,36 +105,47 @@ jobs:
     strategy:
       matrix:
         coq_emacs_version:
-          - coq-8.11-emacs-26.3
-          - coq-8.11-emacs-29.1
-          - coq-8.12-emacs-27.1
-          - coq-8.12-emacs-29.1
-          - coq-8.13-emacs-27.2
-          - coq-8.13-emacs-29.1
-          - coq-8.14-emacs-27.2
-          - coq-8.14-emacs-29.1
-          - coq-8.15-emacs-26.3
-          - coq-8.15-emacs-27.1
-          - coq-8.15-emacs-28.1
-          - coq-8.15-emacs-28.2
-          - coq-8.15-emacs-29.1
-          - coq-8.16-emacs-26.3
-          - coq-8.16-emacs-27.1
-          - coq-8.16-emacs-28.2
-          - coq-8.16-emacs-29.1
-          - coq-8.17-emacs-26.3
-          - coq-8.17-emacs-27.1
-          - coq-8.17-emacs-28.2
-          - coq-8.17-emacs-29.1
-          - coq-8.18-emacs-26.3
-          - coq-8.18-emacs-27.1
-          - coq-8.18-emacs-27.2
-          - coq-8.18-emacs-28.1
-          - coq-8.18-emacs-28.2
-          - coq-8.18-emacs-29.1
-      # at most 20 concurrent jobs per free account
-      # cf. https://help.github.com/en/actions/reference/workflow-syntax-for-github-actions#usage-limit
-      max-parallel: 6
+          # The content between the CIPG markers is automatically
+          # changed by the cipg program. Do not change these markers.
+          # CIPG change marker: test-coq-emacs-versions
+          - coq-8.11.2-emacs-26.3
+          - coq-8.11.2-emacs-29.4
+          - coq-8.12.2-emacs-27.1
+          - coq-8.12.2-emacs-29.4
+          - coq-8.13.2-emacs-27.2
+          - coq-8.13.2-emacs-29.4
+          - coq-8.14.1-emacs-27.2
+          - coq-8.14.1-emacs-29.4
+          - coq-8.15.2-emacs-27.1
+          - coq-8.15.2-emacs-28.1
+          - coq-8.15.2-emacs-29.4
+          - coq-8.16.1-emacs-28.2
+          - coq-8.16.1-emacs-29.4
+          - coq-8.17.1-emacs-26.3
+          - coq-8.17.1-emacs-27.1
+          - coq-8.17.1-emacs-28.2
+          - coq-8.17.1-emacs-29.1
+          - coq-8.17.1-emacs-29.4
+          - coq-8.18.0-emacs-26.3
+          - coq-8.18.0-emacs-27.1
+          - coq-8.18.0-emacs-28.2
+          - coq-8.18.0-emacs-29.3
+          - coq-8.18.0-emacs-29.4
+          - coq-8.19.2-emacs-26.3
+          - coq-8.19.2-emacs-27.1
+          - coq-8.19.2-emacs-28.2
+          - coq-8.19.2-emacs-29.3
+          - coq-8.19.2-emacs-29.4
+          - coq-8.20.0-emacs-26.3
+          - coq-8.20.0-emacs-27.1
+          - coq-8.20.0-emacs-27.2
+          - coq-8.20.0-emacs-28.1
+          - coq-8.20.0-emacs-28.2
+          - coq-8.20.0-emacs-29.1
+          - coq-8.20.0-emacs-29.2
+          - coq-8.20.0-emacs-29.3
+          - coq-8.20.0-emacs-29.4
+          # CIPG change marker end
       # don't cancel all in-progress jobs if one matrix job fails:
       fail-fast: false
 
@@ -144,7 +171,7 @@ jobs:
             ocamlc -v
           endGroup
           startGroup Run tests
-            sudo chown -R coq:coq ./ci
+            sudo chown -R coq:coq .
             make tests
           endGroup
 
@@ -156,33 +183,47 @@ jobs:
     strategy:
       matrix:
         coq_emacs_version:
-          - coq-8.11-emacs-26.3
-          - coq-8.11-emacs-29.1
-          - coq-8.12-emacs-27.1
-          - coq-8.12-emacs-29.1
-          - coq-8.13-emacs-27.2
-          - coq-8.13-emacs-29.1
-          - coq-8.14-emacs-27.2
-          - coq-8.14-emacs-29.1
-          - coq-8.15-emacs-26.3
-          - coq-8.15-emacs-27.1
-          - coq-8.15-emacs-28.1
-          - coq-8.15-emacs-28.2
-          - coq-8.15-emacs-29.1
-          - coq-8.16-emacs-26.3
-          - coq-8.16-emacs-27.1
-          - coq-8.16-emacs-28.2
-          - coq-8.16-emacs-29.1
-          - coq-8.17-emacs-26.3
-          - coq-8.17-emacs-27.1
-          - coq-8.17-emacs-28.2
-          - coq-8.17-emacs-29.1
-          - coq-8.18-emacs-26.3
-          - coq-8.18-emacs-27.1
-          - coq-8.18-emacs-27.2
-          - coq-8.18-emacs-28.1
-          - coq-8.18-emacs-28.2
-          - coq-8.18-emacs-29.1
+          # The content between the CIPG markers is automatically
+          # changed by the cipg program. Do not change these markers.
+          # CIPG change marker: compile-coq-emacs-versions
+          - coq-8.11.2-emacs-26.3
+          - coq-8.11.2-emacs-29.4
+          - coq-8.12.2-emacs-27.1
+          - coq-8.12.2-emacs-29.4
+          - coq-8.13.2-emacs-27.2
+          - coq-8.13.2-emacs-29.4
+          - coq-8.14.1-emacs-27.2
+          - coq-8.14.1-emacs-29.4
+          - coq-8.15.2-emacs-27.1
+          - coq-8.15.2-emacs-28.1
+          - coq-8.15.2-emacs-29.4
+          - coq-8.16.1-emacs-28.2
+          - coq-8.16.1-emacs-29.4
+          - coq-8.17.1-emacs-26.3
+          - coq-8.17.1-emacs-27.1
+          - coq-8.17.1-emacs-28.2
+          - coq-8.17.1-emacs-29.1
+          - coq-8.17.1-emacs-29.4
+          - coq-8.18.0-emacs-26.3
+          - coq-8.18.0-emacs-27.1
+          - coq-8.18.0-emacs-28.2
+          - coq-8.18.0-emacs-29.3
+          - coq-8.18.0-emacs-29.4
+          - coq-8.19.2-emacs-26.3
+          - coq-8.19.2-emacs-27.1
+          - coq-8.19.2-emacs-28.2
+          - coq-8.19.2-emacs-29.3
+          - coq-8.19.2-emacs-29.4
+          - coq-8.20.0-emacs-26.3
+          - coq-8.20.0-emacs-27.1
+          - coq-8.20.0-emacs-27.2
+          - coq-8.20.0-emacs-28.1
+          - coq-8.20.0-emacs-28.2
+          - coq-8.20.0-emacs-29.1
+          - coq-8.20.0-emacs-29.2
+          - coq-8.20.0-emacs-29.3
+          - coq-8.20.0-emacs-29.4
+          # CIPG change marker end
       # don't cancel all in-progress jobs if one matrix job fails:
       fail-fast: false
     steps:
@@ -204,7 +245,7 @@ jobs:
             ocamlc -v
           endGroup
           startGroup Run tests
-            sudo chown -R coq:coq ./ci
+            sudo chown -R coq:coq .
             make -C ci/compile-tests test
           endGroup
 
@@ -216,33 +257,47 @@ jobs:
     strategy:
       matrix:
         coq_emacs_version:
-          - coq-8.11-emacs-26.3
-          - coq-8.11-emacs-29.1
-          - coq-8.12-emacs-27.1
-          - coq-8.12-emacs-29.1
-          - coq-8.13-emacs-27.2
-          - coq-8.13-emacs-29.1
-          - coq-8.14-emacs-27.2
-          - coq-8.14-emacs-29.1
-          - coq-8.15-emacs-26.3
-          - coq-8.15-emacs-27.1
-          - coq-8.15-emacs-28.1
-          - coq-8.15-emacs-28.2
-          - coq-8.15-emacs-29.1
-          - coq-8.16-emacs-26.3
-          - coq-8.16-emacs-27.1
-          - coq-8.16-emacs-28.2
-          - coq-8.16-emacs-29.1
-          - coq-8.17-emacs-26.3
-          - coq-8.17-emacs-27.1
-          - coq-8.17-emacs-28.2
-          - coq-8.17-emacs-29.1
-          - coq-8.18-emacs-26.3
-          - coq-8.18-emacs-27.1
-          - coq-8.18-emacs-27.2
-          - coq-8.18-emacs-28.1
-          - coq-8.18-emacs-28.2
-          - coq-8.18-emacs-29.1
+          # The content between the CIPG markers is automatically
+          # changed by the cipg program. Do not change these markers.
+          # CIPG change marker: simple-coq-emacs-versions
+          - coq-8.11.2-emacs-26.3
+          - coq-8.11.2-emacs-29.4
+          - coq-8.12.2-emacs-27.1
+          - coq-8.12.2-emacs-29.4
+          - coq-8.13.2-emacs-27.2
+          - coq-8.13.2-emacs-29.4
+          - coq-8.14.1-emacs-27.2
+          - coq-8.14.1-emacs-29.4
+          - coq-8.15.2-emacs-27.1
+          - coq-8.15.2-emacs-28.1
+          - coq-8.15.2-emacs-29.4
+          - coq-8.16.1-emacs-28.2
+          - coq-8.16.1-emacs-29.4
+          - coq-8.17.1-emacs-26.3
+          - coq-8.17.1-emacs-27.1
+          - coq-8.17.1-emacs-28.2
+          - coq-8.17.1-emacs-29.1
+          - coq-8.17.1-emacs-29.4
+          - coq-8.18.0-emacs-26.3
+          - coq-8.18.0-emacs-27.1
+          - coq-8.18.0-emacs-28.2
+          - coq-8.18.0-emacs-29.3
+          - coq-8.18.0-emacs-29.4
+          - coq-8.19.2-emacs-26.3
+          - coq-8.19.2-emacs-27.1
+          - coq-8.19.2-emacs-28.2
+          - coq-8.19.2-emacs-29.3
+          - coq-8.19.2-emacs-29.4
+          - coq-8.20.0-emacs-26.3
+          - coq-8.20.0-emacs-27.1
+          - coq-8.20.0-emacs-27.2
+          - coq-8.20.0-emacs-28.1
+          - coq-8.20.0-emacs-28.2
+          - coq-8.20.0-emacs-29.1
+          - coq-8.20.0-emacs-29.2
+          - coq-8.20.0-emacs-29.3
+          - coq-8.20.0-emacs-29.4
+          # CIPG change marker end
       # don't cancel all in-progress jobs if one matrix job fails:
       fail-fast: false
 
@@ -265,7 +320,7 @@ jobs:
             ocamlc -v
           endGroup
           startGroup Run tests
-            sudo chown -R coq:coq ./ci
+            sudo chown -R coq:coq .
             make -C ci/simple-tests coq-all
           endGroup
 
@@ -280,13 +335,19 @@ jobs:
     strategy:
       matrix:
         emacs_version:
+          # The content between the CIPG markers is automatically
+          # changed by the cipg program. Do not change these markers.
+          # CIPG change marker: indent-emacs-versions
           - 26.3
           - 27.1
           - 27.2
           - 28.1
           - 28.2
           - 29.1
-      max-parallel: 4
+          - 29.2
+          - 29.3
+          - 29.4
+          # CIPG change marker end
       # don't cancel all in-progress jobs if one matrix job fails:
       fail-fast: false
 
@@ -311,13 +372,19 @@ jobs:
     strategy:
       matrix:
         emacs_version:
+          # The content between the CIPG markers is automatically
+          # changed by the cipg program. Do not change these markers.
+          # CIPG change marker: qrhl-emacs-versions
           - 26.3
           - 27.1
           - 27.2
           - 28.1
           - 28.2
           - 29.1
-      max-parallel: 4
+          - 29.2
+          - 29.3
+          - 29.4
+          # CIPG change marker end
       # don't cancel all in-progress jobs if one matrix job fails:
       fail-fast: false
 
