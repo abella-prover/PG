@@ -1,6 +1,6 @@
 ;; abella-syntax.el --- Proof General instance for Abella - syntax file
 ;;
-;; Copyright (C) 2011-2013 INRIA
+;; Copyright (C) 2011-2024 INRIA
 ;;
 ;; Authors: Clement Houtmann <Clement.Houtmann@inria.fr>
 ;;          Kaustuv Chaudhuri <kaustuv@chaudhuri.info>
@@ -16,8 +16,8 @@
     ;; (regexp-opt '("->" ":=" ":" ";" "." "," "/\\" "\\/" "=" "\\") 'symbols)
     ("\\_<\\(->\\|/\\\\\\|:=\\|\\\\/\\|[,.:;=\\]\\)\\_>"
      . font-lock-builtin-face)
-    ;; (regexp-opt '("kind" "type" "forall" "exists" "nabla" "true" "pi") 'words)
-    ("\\<\\(exists\\|forall\\|kind\\|nabla\\|pi\\|t\\(?:\\(?:ru\\|yp\\)e\\)\\)\\>"
+    ;; (regexp-opt '("kind" "type" "forall" "exists" "nabla" "true" "false" "pi") 'words)
+    ("\\<\\(exists\\|f\\(?:alse\\|orall\\)\\|kind\\|nabla\\|pi\\|t\\(?:\\(?:ru\\|yp\\)e\\)\\)\\>"
      . font-lock-keyword-face)
     )
   "Abella core language font-lock keywords")
