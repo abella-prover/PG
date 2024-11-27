@@ -30,7 +30,7 @@
     ;; (regexp-opt '("Import" "Specification") 'words)
     ("\\<\\(Import\\|Specification\\)\\>"
      . font-lock-builtin-face)
-    ("\\<\\(Type\\|Kind\\|Close\\)\\>"
+    ("\\<\\(Type\\|Kind\\|Close\\|Suspend\\)\\>"
      . font-lock-keyword-face)
     ("\\<\\(\\(?:Co\\)?Define\\|Recursive\\|Schema\\|Inductive\\|by\\)\\>"
      . font-lock-keyword-face)
@@ -38,8 +38,8 @@
      . font-lock-keyword-face)
     ("\\<\\(skip\\|undo\\|abort\\)\\>"
      . font-lock-warning-face)
-    ;; (regexp-opt '("abbrev" "all" "apply" "assert" "backchain" "case" "clear" "coinduction" "cut" "induction" "inst" "intros" "keep" "left" "monotone" "on" "permute" "rename" "right" "search" "split" "split*" "to" "unabbrev" "unfold" "with" "witness") 'words)
-    ("\\<\\(a\\(?:bbrev\\|ll\\|pply\\|ssert\\)\\|backchain\\|c\\(?:ase\\|lear\\|oinduction\\|ut\\)\\|in\\(?:duction\\|st\\|tros\\)\\|keep\\|left\\|monotone\\|on\\|permute\\|r\\(?:ename\\|ight\\)\\|s\\(?:earch\\|plit\\*?\\)\\|to\\|un\\(?:abbrev\\|fold\\)\\|wit\\(?:h\\|ness\\)\\)\\>"
+    ;; (regexp-opt '("abbrev" "all" "apply" "assert" "backchain" "case" "clear" "coinduction" "compute" "cut" "induction" "inst" "intros" "keep" "left" "monotone" "on" "permute" "rename" "right" "search" "split" "split*" "to" "unabbrev" "unfold" "with" "witness") 'words)
+    ("\\<\\(a\\(?:bbrev\\|ll\\|pply\\|ssert\\)\\|backchain\\|c\\(?:ase\\|lear\\|o\\(?:induction\\|mpute\\)\\|ut\\)\\|in\\(?:duction\\|st\\|tros\\)\\|keep\\|left\\|monotone\\|on\\|permute\\|r\\(?:ename\\|ight\\)\\|s\\(?:earch\\|plit\\*?\\)\\|to\\|un\\(?:abbrev\\|fold\\)\\|wit\\(?:h\\|ness\\)\\)\\>"
      . font-lock-function-name-face)
     )
   "Abella reasoning level font-lock keywords")
