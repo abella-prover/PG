@@ -6,6 +6,7 @@ the Git ChangeLog, the GitHub repo https://github.com/ProofGeneral/PG
 * Changes of Proof General 4.6 from Proof General 4.5
 
 ** Generic changes
+*** Add support for the Abella theorem prover.
 *** Improve the omit-proofs feature to handle a number of cases where
     proofs must not be omitted.
 *** Renew support for proof-tree visualization via the external command

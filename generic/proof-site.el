@@ -44,6 +44,7 @@
     '(
       ;; Main instances of PG.
 
+      (abella "Abella" "thm" "\\.thm\\(?:od\\)?\\'" (".thc" ".thmodc"))
       (coq "Coq" "v" nil (".vo" ".glob" ".vok" ".vos"))
       (easycrypt "EasyCrypt" "ec" "\\.eca?\\'")
       (phox "PhoX" "phx" nil (".phi" ".pho"))

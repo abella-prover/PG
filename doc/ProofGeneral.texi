@@ -159,7 +159,7 @@ generic Emacs interface for proof assistants.
 
 Proof General @value{version} has been tested with GNU Emacs
 @value{emacsversion} on Linux.  It is supplied ready to use for the
-proof assistants Coq, EasyCrypt, qrhl-tool, and PhoX.
+proof assistants Abella, Coq, EasyCrypt, qrhl-tool, and PhoX.
 
 @menu
 * Preface::                     
@@ -542,6 +542,7 @@ script file for your proof assistant, for example:
 
 @multitable @columnfractions .35 .3 .35
 @item       @b{Prover}    @tab @b{Extensions} @tab @b{Mode}
+@item       Abella        @tab @file{.thm}, @file{.thmod} @tab @code{abella-mode}
 @item       Coq           @tab @file{.v}      @tab @code{coq-mode}
 @item       Phox          @tab @file{.phx}    @tab @code{phox-mode}
 @item       PG-Shell      @tab @file{.pgsh}   @tab @code{pgshell-mode}
