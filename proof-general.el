@@ -32,7 +32,7 @@
 ;; Proof General is a generic Emacs interface for proof assistants
 ;; (also known as interactive theorem provers).
 ;;
-;; It is supplied ready to use for the proof assistants Coq,
+;; It is supplied ready to use for the proof assistants Abella, Coq,
 ;; EasyCrypt, qrhl-tool, and PhoX.
 ;;
 ;; See https://proofgeneral.github.io/ for installation instructions
@@ -78,7 +78,8 @@
   ;; the corresponding file.
   (let ((byte-compile-directories
          '("generic" "lib"
-           "coq" "easycrypt" "pghaskell" "pgocaml" "pgshell" "phox" "qrhl"
+           "abella" "coq" "easycrypt" "pghaskell" "pgocaml" "pgshell"
+           "phox" "qrhl"
            )))
     (dolist (dir byte-compile-directories)
       (add-to-list 'load-path (expand-file-name dir pg-init--pg-root)))))
