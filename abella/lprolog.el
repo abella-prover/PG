@@ -18,7 +18,15 @@
 ;;; Code:
 
 (require 'prog-mode)
-(require 'abella-syntax)
+;; `lprolog-mode' may be autoloaded before Proof General has put the
+;; Abella directory on `load-path', so load the sibling file directly.
+(eval-and-compile
+  (let ((dir (file-name-directory (or load-file-name
+                                      buffer-file-name
+                                      byte-compile-current-file))))
+    (if dir
+        (require 'abella-syntax (expand-file-name "abella-syntax" dir))
+      (require 'abella-syntax))))
 
 (defgroup lprolog nil
   "Editing support for Lambda Prolog module files."
