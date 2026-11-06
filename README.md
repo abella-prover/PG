@@ -77,9 +77,10 @@ Then, run <kbd>M-x package-refresh-contents RET</kbd> followed by
 <kbd>M-x package-install RET proof-general RET</kbd> to install and
 byte-compile `proof-general`.
 
-You can now open an Abella file (`.thm` or `.thmod`), a Coq file (`.v`),
-an EasyCrypt file (`.ec`), a qrhl-tool file (`.qrhl`), or a PhoX file
-(`.phx`) to automatically load the corresponding major mode.
+You can now open an Abella file (`.thm` or `.thmod`), an Abella Lambda
+Prolog module file (`.mod` or `.sig`), a Coq file (`.v`), an EasyCrypt
+file (`.ec`), a qrhl-tool file (`.qrhl`), or a PhoX file (`.phx`) to
+automatically load the corresponding major mode.
 
 ### Using Git (manual compilation procedure)
 
